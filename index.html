@@ -43,21 +43,32 @@
       position: absolute;
       width: 30px;
       height: 30px;
-      background-image: url('https://cdn-icons-png.flaticon.com/512/1995/1995522.png');
+      background-image: url('https://pngimg.com/d/popcorn_PNG2.png');
       background-size: contain;
       background-repeat: no-repeat;
       opacity: 1;
-      animation: float 10s infinite ease-in-out;
       filter: drop-shadow(0 0 4px #fff);
     }
-    @keyframes float {
+    @keyframes float-clockwise {
+      0% {
+        transform: translateY(100vh) rotate(0deg);
+        opacity: 0;
+      }
+      20% { opacity: 1; }
+      60% { opacity: 1; }
+      100% {
+        transform: translateY(-30vh) rotate(360deg);
+        opacity: 0;
+      }
+    }
+    @keyframes float-counter {
       0% {
         transform: translateY(100vh) rotate(0deg);
         opacity: 0;
       }
       20% { opacity: 1; }
       100% {
-        transform: translateY(-20vh) rotate(360deg);
+        transform: translateY(-20vh) rotate(-360deg);
         opacity: 0;
       }
     }
@@ -100,6 +111,9 @@
       kernel.style.animationDuration = (5 + Math.random() * 10) + 's';
       kernel.style.animationDelay = (Math.random() * 5) + 's';
       kernel.style.transform = `scale(${0.8 + Math.random() * 0.8})`;
+      kernel.style.animationName = Math.random() > 0.5 ? 'float-clockwise' : 'float-counter';
+      kernel.style.animationTimingFunction = 'ease-in-out';
+      kernel.style.animationIterationCount = 'infinite';
       document.body.appendChild(kernel);
     }
   </script>
