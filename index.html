@@ -41,12 +41,14 @@
     }
     .popcorn {
       position: absolute;
-      width: 20px;
-      height: 20px;
+      width: 30px;
+      height: 30px;
       background-image: url('https://cdn-icons-png.flaticon.com/512/1995/1995522.png');
-      background-size: cover;
-      opacity: 0.8;
+      background-size: contain;
+      background-repeat: no-repeat;
+      opacity: 1;
       animation: float 10s infinite ease-in-out;
+      filter: drop-shadow(0 0 4px #fff);
     }
     @keyframes float {
       0% {
@@ -97,7 +99,7 @@
       kernel.style.left = Math.random() * 100 + 'vw';
       kernel.style.animationDuration = (5 + Math.random() * 10) + 's';
       kernel.style.animationDelay = (Math.random() * 5) + 's';
-      kernel.style.transform = `scale(${0.5 + Math.random()})`;
+      kernel.style.transform = `scale(${0.8 + Math.random() * 0.8})`;
       document.body.appendChild(kernel);
     }
   </script>
