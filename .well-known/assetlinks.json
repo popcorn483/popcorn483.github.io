@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "uk.org.ergs.live",
+    "sha256_cert_fingerprints": ["3F:98:0E:BD:17:D1:9A:07:8A:4C:E9:34:74:68:3F:BA:A1:EF:4E:C2:D7:44:27:88:E7:BD:E1:6C:A2:EC:0B:41"]
+  }
+}]
