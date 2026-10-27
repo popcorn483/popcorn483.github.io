@@ -11,11 +11,11 @@
       box-sizing: border-box;
     }
     html, body {
-      height: 100%;
+      min-height: 100%;
       background: radial-gradient(circle at center, #0f0f0f, #000);
       color: #fff;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      overflow: hidden;
+      overflow-x: hidden;
     }
     .nav {
       position: absolute;
@@ -43,8 +43,9 @@
     }
     .container {
       position: relative;
-      height: 100%;
+      min-height: 100vh;
       width: 100%;
+      padding: 110px 20px 70px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -64,7 +65,9 @@
       color: #aaa;
     }
     .popcorn {
-      position: absolute;
+      position: fixed;
+      top: 0;
+      pointer-events: none;
       width: 30px;
       height: 30px;
       background-image: url('https://png.pngitem.com/pimgs/s/187-1876163_popcorn-no-background-piece-of-popcorn-transparent-hd.png');
@@ -97,7 +100,8 @@
       }
     }
     .screen-frame {
-      position: absolute;
+      position: fixed;
+      z-index: 4;
       top: 0;
       left: 0;
       width: 100%;
@@ -107,13 +111,59 @@
       pointer-events: none;
     }
     .glow {
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
       background: radial-gradient(circle, rgba(255,255,255,0.05), transparent);
       pointer-events: none;
+    }
+    /* Link tree */
+    .links {
+      width: 100%;
+      max-width: 560px;
+      margin-top: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      text-align: left;
+    }
+    .group {
+      color: #ffbb00;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin: 14px 0 0 6px;
+    }
+    .group:first-child { margin-top: 0; }
+    .link {
+      display: block;
+      text-decoration: none;
+      color: #fff;
+      padding: 14px 20px;
+      background: rgba(18, 14, 4, 0.88);
+      border: 2px solid #ffbb00;
+      border-radius: 18px;
+      transition: background 0.2s, color 0.2s, transform 0.2s;
+    }
+    .link strong { display: block; font-size: 1.1rem; }
+    .link span { display: block; color: #bbb; font-size: 0.92rem; margin-top: 2px; }
+    .link:hover, .link:focus-visible {
+      background: #ffbb00;
+      color: #000;
+      transform: translateY(-2px);
+      outline: none;
+    }
+    .link:hover span, .link:focus-visible span { color: #2a2000; }
+    @media (max-width: 600px) {
+      h1 { font-size: 3rem; }
+      .nav { gap: 8px; }
+      .nav a { padding: 8px 12px; font-size: 0.9rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .popcorn { display: none; }
+      .link { transition: none; }
     }
   </style>
 </head>
@@ -130,6 +180,38 @@
   <div class="container">
     <h1>Mr Butler</h1>
     <h2>Popcorn | Gamer & Movie Buff</h2>
+
+    <nav class="links" aria-label="My sites">
+      <h3 class="group">Teaching</h3>
+      <a class="link" href="https://popcorn483.github.io/mrbutler/">
+        <strong>C# Academy</strong>
+        <span>Learn to program in C#, from your first line of code to an OOP quiz with a login</span>
+      </a>
+      <a class="link" href="https://popcorn483.github.io/ergsDigitalTechnology/">
+        <strong>Digital Technology Hub</strong>
+        <span>CCEA GCSE and GCE Digital Technology lessons (pupil passcode needed)</span>
+      </a>
+      <a class="link" href="https://popcorn483.github.io/MrButlersCTF/">
+        <strong>Mr Butler's CTF</strong>
+        <span>About 200 cyber security puzzles to train for ZeroDays-style competitions</span>
+      </a>
+
+      <h3 class="group">ERGS Rugby</h3>
+      <a class="link" href="https://popcorn483.github.io/ergs-live/">
+        <strong>ERGS Live</strong>
+        <span>Live scores, fixtures and results for Enniskillen Royal Grammar School rugby</span>
+      </a>
+      <a class="link" href="https://popcorn483.github.io/ergs-live/app/">
+        <strong>ERGS Rugby app</strong>
+        <span>Tactics, team of the week and match tools for coaches and players</span>
+      </a>
+
+      <h3 class="group">Cinema</h3>
+      <a class="link" href="https://popcorn483.github.io/imc/">
+        <strong>IMC Hub</strong>
+        <span>Plan, design, caption and track social media ads for IMC Cinema Enniskillen</span>
+      </a>
+    </nav>
   </div>
 
   <!-- Popcorn Kernel Elements -->
