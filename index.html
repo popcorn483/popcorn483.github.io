@@ -11,11 +11,11 @@
       box-sizing: border-box;
     }
     html, body {
-      min-height: 100%;
+      height: 100%;
       background: radial-gradient(circle at center, #0f0f0f, #000);
       color: #fff;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      overflow-x: hidden;
+      overflow: hidden;
     }
     .nav {
       position: absolute;
@@ -43,9 +43,8 @@
     }
     .container {
       position: relative;
-      min-height: 100vh;
+      height: 100%;
       width: 100%;
-      padding: 110px 20px 70px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -65,9 +64,7 @@
       color: #aaa;
     }
     .popcorn {
-      position: fixed;
-      top: 0;
-      pointer-events: none;
+      position: absolute;
       width: 30px;
       height: 30px;
       background-image: url('https://png.pngitem.com/pimgs/s/187-1876163_popcorn-no-background-piece-of-popcorn-transparent-hd.png');
@@ -100,8 +97,7 @@
       }
     }
     .screen-frame {
-      position: fixed;
-      z-index: 4;
+      position: absolute;
       top: 0;
       left: 0;
       width: 100%;
@@ -111,7 +107,7 @@
       pointer-events: none;
     }
     .glow {
-      position: fixed;
+      position: absolute;
       top: 0;
       left: 0;
       width: 100%;
@@ -123,7 +119,7 @@
     .links {
       width: 100%;
       max-width: 560px;
-      margin-top: 2.5rem;
+      margin-top: 1.75rem;
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -197,9 +193,17 @@
     .lock { margin-top: 18px; background: transparent; color: #ffbb00; padding: 6px 16px; font-size: 0.9rem; }
     .lock:hover { background: #ffbb00; color: #000; }
     #vault { width: 100%; display: flex; justify-content: center; }
+    /* The page itself never scrolls (that keeps the kernels as they were), so the list scrolls inside its own area */
+    .links {
+      max-height: calc(100vh - 380px);
+      overflow-y: auto;
+      padding: 4px 8px 4px 4px;
+      scrollbar-color: #ffbb00 transparent;
+    }
     @media (max-width: 600px) {
       h1 { font-size: 3rem; }
       .nav { gap: 8px; }
+      .links { max-height: calc(100vh - 260px); }
       .nav a { padding: 8px 12px; font-size: 0.9rem; white-space: nowrap; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -317,5 +321,6 @@
       })();
     })();
   </script>
+
 </body>
 </html>
