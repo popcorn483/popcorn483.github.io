@@ -156,10 +156,51 @@
       outline: none;
     }
     .link:hover span, .link:focus-visible span { color: #2a2000; }
+    /* Password gate */
+    .gate {
+      width: 100%;
+      max-width: 420px;
+      margin-top: 2.5rem;
+      padding: 22px 24px;
+      background: rgba(18, 14, 4, 0.88);
+      border: 2px solid #ffbb00;
+      border-radius: 18px;
+      text-align: left;
+    }
+    .gate > label { display: block; font-weight: bold; margin-bottom: 10px; }
+    .gate-row { display: flex; gap: 10px; }
+    .gate input[type="password"] {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 14px;
+      border-radius: 30px;
+      border: 2px solid #665000;
+      background: #000;
+      color: #fff;
+      font: inherit;
+    }
+    .gate input[type="password"]:focus { outline: none; border-color: #ffbb00; }
+    .gate button, .lock {
+      padding: 10px 20px;
+      border-radius: 30px;
+      border: 2px solid #ffbb00;
+      background: #ffbb00;
+      color: #000;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .gate button:disabled { opacity: 0.6; cursor: wait; }
+    .remember { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: #bbb; font-size: 0.92rem; }
+    .remember input { accent-color: #ffbb00; }
+    .gate-msg { margin-top: 10px; min-height: 1.2em; color: #ff9a6b; font-size: 0.92rem; }
+    .lock { margin-top: 18px; background: transparent; color: #ffbb00; padding: 6px 16px; font-size: 0.9rem; }
+    .lock:hover { background: #ffbb00; color: #000; }
+    #vault { width: 100%; display: flex; justify-content: center; }
     @media (max-width: 600px) {
       h1 { font-size: 3rem; }
       .nav { gap: 8px; }
-      .nav a { padding: 8px 12px; font-size: 0.9rem; }
+      .nav a { padding: 8px 12px; font-size: 0.9rem; white-space: nowrap; }
     }
     @media (prefers-reduced-motion: reduce) {
       .popcorn { display: none; }
@@ -181,37 +222,17 @@
     <h1>Mr Butler</h1>
     <h2>Popcorn | Gamer & Movie Buff</h2>
 
-    <nav class="links" aria-label="My sites">
-      <h3 class="group">Teaching</h3>
-      <a class="link" href="https://popcorn483.github.io/mrbutler/">
-        <strong>C# Academy</strong>
-        <span>Learn to program in C#, from your first line of code to an OOP quiz with a login</span>
-      </a>
-      <a class="link" href="https://popcorn483.github.io/ergsDigitalTechnology/">
-        <strong>Digital Technology Hub</strong>
-        <span>CCEA GCSE and GCE Digital Technology lessons (pupil passcode needed)</span>
-      </a>
-      <a class="link" href="https://popcorn483.github.io/MrButlersCTF/">
-        <strong>Mr Butler's CTF</strong>
-        <span>About 200 cyber security puzzles to train for ZeroDays-style competitions</span>
-      </a>
-
-      <h3 class="group">ERGS Rugby</h3>
-      <a class="link" href="https://popcorn483.github.io/ergs-live/">
-        <strong>ERGS Live</strong>
-        <span>Live scores, fixtures and results for Enniskillen Royal Grammar School rugby</span>
-      </a>
-      <a class="link" href="https://popcorn483.github.io/ergs-live/app/">
-        <strong>ERGS Rugby app</strong>
-        <span>Tactics, team of the week and match tools for coaches and players</span>
-      </a>
-
-      <h3 class="group">Cinema</h3>
-      <a class="link" href="https://popcorn483.github.io/imc/">
-        <strong>IMC Hub</strong>
-        <span>Plan, design, caption and track social media ads for IMC Cinema Enniskillen</span>
-      </a>
-    </nav>
+    <form class="gate" id="gate" autocomplete="off">
+      <label for="pw">Enter the password to see my sites</label>
+      <div class="gate-row">
+        <input id="pw" type="password" autocomplete="current-password" required>
+        <button type="submit" id="unlock">Unlock</button>
+      </div>
+      <label class="remember"><input type="checkbox" id="remember"> Remember me on this device</label>
+      <p class="gate-msg" id="msg" role="status" aria-live="polite"></p>
+    </form>
+    <div id="vault" hidden></div>
+    <button type="button" class="lock" id="lock" hidden>Lock</button>
   </div>
 
   <!-- Popcorn Kernel Elements -->
@@ -229,6 +250,72 @@
       kernel.style.animationIterationCount = 'infinite';
       document.body.appendChild(kernel);
     }
+  </script>
+  <!-- Password lock: the site list is encrypted (AES-256-GCM, key from PBKDF2-SHA-256, 600,000 rounds).
+       The password is not stored here. To change it, re-encrypt the list with a new password. -->
+  <script>
+    (function () {
+      const VAULT = {"salt": "aceoa5Ve6vXTLB80YaJNEQ==", "iv": "b5zOnaKWg9YbtFvX", "ct": "RgrlXYZllU8ZfmKYuXLb7ZbCgo3NuEqpqigzuhiorT89CBYafENLpkcomZz+0uGOG4ehBncWt+s3qefSTNxc56YXWjDLSB/pL4mY4C8TfnGs4ZiObs6lOMpL1u7nLnQDtxSPP9fu6TcW3LHqf/glYnSXC+1EyP+i5MATLTLeT+7atTXlsZ/Axs/6s98O8MnXkCAxjg/09nGa6w1BhBm7sfvf2YeLrXpNeJ7+P6yL4i2gGGS8Bd8/my+rTLlF5IYSC+O/l/+duHhFmk5ynb8voSQkvo3ldyScqwoessG0gYv/xFufhXZDk9zDp9HJpFZPsDECJQeW4ej2hI8O3TxulWV8Mne9RX2oRwjG93sOPfCfuECAyTcyh/o6mI7gPibUK4M9l+5WhMMIKwvXdmQhtSHP8JVEPpUQgBvE/zCvXAFsBerdjI0EiI5XrYsxSB/+u7oI5qWqbDwameJXQ6iA+ijqIGtM0EY1i7+/ivIPRmaL+iucALbvJZucqaiWlDOcJ/TZhf6oMPerBJHMNd6Pz5xErWbz5AUvEZk1ITPcFlIig77oCQjK5qd78igN1xfzLL4fzFH8VJ6w6PTgxrzndpKu3T0G2wrDJKuOPy9L5FvGVmJsm+WwEn7KmXZMl4DM/6zarrHqEo5fLM01PYNz8fdjLeVJGTddNtGSwuiImDj46Ja642GTe6XZ+6c2gnTtCdZGMdJzD+zIBDaNB/ZOlRok6RA33fKoj+TxL8De1gznCq7AJ8w5U6sQ+7DPgQKYWXKS0C4R1tDMgi8U6yBqwW4nzH+VoeiaYq302n89cgkGT8pcNN+rBKUhryUKy41NJQXKsselJf8RS3Yq/2CBxKAMxLRJW1ndINFe93ocTYIo/bq1Et8oS7zGMFSA3YihyYJ3b+UDE28xYHWZiu15GhHzW/BA8mYS5lBUeUQsdVe8wmaC/pPiA6vGrGmFMEVzOehUfSLGwrRhYW4eheb+2uqcQ6rorMtyd6eM1VFPv2mPKNNJp6R3B9fVkdUkxLIcakXKSZR1GASunie2LlLS57VNwIG4Z2km4vmKFgk0sklVshBgcZ7MQsVP5OS1dKWw8nYi7ZoJPEvS492wat1CT45YauOud8KtHdvsq7lVJQ5Si5GEU3asBQHu/HlHa9NqGCKqR5Okv1o/POwLMV0mzHtgQLGIvvuZB9df7vy8+wYZPLRpvDBoxwZVEh888BkSzksTDoRiOvJI/BGPr7BHtoNZ98G8PtzLqcoLGElJHb0njgvwGKHUs2jn1DcFGulPEqSz9XG2djH6tTp+JI/UcLx80d77JTYgntVFAGbiueD9mxnFLDX9HK36S8MGMavJvweMv0v9HsFJTIM4hciAQV7viXfMN01j6pXYNJKIOz6Yk/f+CMO3IvD4mlF2A2nx2CPO9R78UkJd7KN2F/8Ss2MXJ8wwt+ldptF6rWJqbAia76FIL7ZPlNdgEyxgO9j07pQQ6b8SHrPgaBpU/pe5VH1UD01XwV2cB66JX+oVCTazlG4OVvzRf+njjet4P2/ztjIh0eBKjv8e/7AImVOCw2vHazxG7LdYsOuDjm66A+VQ6gXxsAztT8BEIBqnUjtT2223jLfBK8r6NPMVE0wQZ3YHnF3Y33ggbtSVaLUijoP3ullfCYgL6Z6jdemqBSgmWH894ARfq+yPgtZENqL3fcmET1S9F00NIPUsQdk+nF5usVz4zZG9lwByyLVJyKwFduSBszY0M1/tiOLfuSSivR+X7NRtbbXDNkI7/cSGhrpYFVyB0edSfN591qIExjilPHp6X16mi96nd97HfKUYnM43TgJsIQM/LrrXdc8rRh9wz0ozOnUvAjZE0ldGQUbvLzAIWMycoFOQY1jeiRC7+PCqBMsAybtiXOMJiwdN3UfS+iabViUqE+ETNdUnwLldD3GFyEQ1t+XPTCHaEYcDcpxqVwBmDTPx6Cxc0Q/MYGLFEqOwzkOoge36ErQ="};
+      const KEY_STORE = "mrbutler.home.key";
+      const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const $ = (id) => document.getElementById(id);
+
+      async function keyFromPassword(pw) {
+        const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+        return crypto.subtle.deriveKey({ name: "PBKDF2", salt: bytes(VAULT.salt), iterations: 600000, hash: "SHA-256" },
+          base, { name: "AES-GCM", length: 256 }, true, ["decrypt"]);
+      }
+      async function open(key) {
+        const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes(VAULT.iv) }, key, bytes(VAULT.ct));
+        $("vault").innerHTML = new TextDecoder().decode(plain);
+        $("vault").hidden = false;
+        $("gate").hidden = true;
+        $("lock").hidden = false;
+      }
+      function forget() { try { localStorage.removeItem(KEY_STORE); } catch (e) {} }
+
+      $("gate").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btn = $("unlock");
+        btn.disabled = true;
+        $("msg").textContent = "Unlocking…";
+        try {
+          const key = await keyFromPassword($("pw").value);
+          await open(key);
+          $("msg").textContent = "";
+          if ($("remember").checked) {
+            const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+            try { localStorage.setItem(KEY_STORE, btoa(String.fromCharCode(...raw))); } catch (e) {}
+          }
+        } catch (err) {
+          $("msg").textContent = "That password isn't right. Check it and try again.";
+          $("pw").select();
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      $("lock").addEventListener("click", () => {
+        forget();
+        $("vault").innerHTML = "";
+        $("vault").hidden = true;
+        $("lock").hidden = true;
+        $("gate").hidden = false;
+        $("pw").value = "";
+        $("pw").focus();
+      });
+
+      // Reopen straight away on a device that chose "Remember me".
+      (async () => {
+        let saved = null;
+        try { saved = localStorage.getItem(KEY_STORE); } catch (e) {}
+        if (!saved) return;
+        try {
+          const key = await crypto.subtle.importKey("raw", bytes(saved), "AES-GCM", false, ["decrypt"]);
+          await open(key);
+        } catch (e) { forget(); }
+      })();
+    })();
   </script>
 </body>
 </html>
