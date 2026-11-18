@@ -213,3 +213,16 @@ table.rel select,table.rel input[type=date]{font:inherit;font-size:14px;padding:
 }
 .latest .cover{width:150px;aspect-ratio:210/297;overflow:hidden;border-radius:8px;border:1px solid var(--line);flex:none}
 .latest .cover img{width:100%;display:block}
+
+.iostip{position:fixed;left:12px;right:12px;bottom:16px;z-index:200;background:#fff;color:var(--ink);border-radius:16px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.3);max-width:440px;margin:auto}
+.iostip p{margin:6px 0 10px;font-size:15px}.iostip svg{vertical-align:-3px;color:var(--blue)}
+.es-card{background:#0f2c52!important;border-color:rgba(188,214,245,.4)!important}
+@supports (padding:max(0px)){.mast-in{padding-top:max(10px,env(safe-area-inset-top))}}
+@media screen and (max-width:620px){.mast-nav{gap:10px}.mast-nav a,.linkbtn{font-size:13px}.brand span{display:none}}
+.mast-nav a,.linkbtn{white-space:nowrap}
+@media screen and (max-width:620px){
+  .mast-nav [data-nav="library"]{display:none}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{padding:8px 10px}.stat b{font-size:20px}.stat span{font-size:12px}
+  .latest .cover{width:96px}.latest h2{font-size:18px}
+  .readbar .btn{padding:8px 12px;font-size:13px}
+}

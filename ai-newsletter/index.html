@@ -2,12 +2,20 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AI in School: A Teacher's Guide · ERGS</title>
 <meta name="robots" content="noindex">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Caveat:wght@600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f2c52">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AI in School">
 </head>
 <body>
 <div id="gate" class="gate" hidden>
@@ -31,6 +39,8 @@
       <nav class="mast-nav">
         <a href="#" data-nav="library">Library</a>
         <a href="#admin" data-nav="admin" id="adminLink">Release desk</a>
+        <button class="linkbtn" id="installBtn" hidden>Install app</button>
+        <button class="linkbtn" id="shareBtn">Share</button>
         <button class="linkbtn" id="lockBtn" title="Forget the password on this device">Lock</button>
       </nav>
     </div>
@@ -63,6 +73,7 @@
       <span class="spacer"></span>
       <button class="btn ghost" id="prevBtn">‹ Previous</button>
       <button class="btn ghost" id="nextBtn">Next ›</button>
+      <button class="btn" id="shareIssueBtn">Share</button>
       <button class="btn primary" id="printBtn">Print / Save PDF</button>
     </div>
     <div id="lockNote" class="locknote" hidden></div>
@@ -75,10 +86,16 @@
 
   <footer class="foot">ERGS · AI in School: A Teacher's Guide · For staff use only. Never enter pupil names or personal data into AI tools.</footer>
 </div>
+<div id="iosTip" class="iostip" hidden role="dialog" aria-label="Install on iPhone">
+  <b>Install AI in School</b>
+  <p>Tap the <b>Share</b> button <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v7h14v-7"/></svg> in Safari, then choose <b>Add to Home Screen</b>.</p>
+  <button class="btn small" id="iosClose">Got it</button>
+</div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
 <script src="crest.js"></script>
+<script src="share.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -128,7 +128,7 @@ function render() {
   if (!CONTENT) return;
   const h = location.hash.slice(1);
   document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', (h === 'admin') === (a.dataset.nav === 'admin')));
-  $('#adminLink').textContent = ADMIN ? 'Release desk' : 'Staff admin';
+  $('#adminLink').textContent = ADMIN ? 'Release desk' : (innerWidth < 620 ? 'Admin' : 'Staff admin');
   $('#library').hidden = $('#reader').hidden = $('#admin').hidden = true;
   if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
   else if (h.startsWith('issue-')) { $('#reader').hidden = false; renderReader(h.slice(6)); }
@@ -459,5 +459,28 @@ async function saveIssue(ev) {
     toast(`Issue ${data.n} saved`); editing = null; pendingPages = pendingThumb = null; formKind = 'tpl'; renderAdmin();
   } catch (e) { console.warn(e); msg.textContent = 'Couldn’t save: ' + (e.code || e.message); btn.disabled = false; }
 }
-// pageDocs → reader uses i.pageDocs for custom image issues
+/* ---------- install as an app ---------- */
+const BASE = location.origin + location.pathname;
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let deferredInstall = null;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; if (!standalone()) $('#installBtn').hidden = false; });
+window.addEventListener('appinstalled', () => { $('#installBtn').hidden = true; toast('Installed – find AI in School on your home screen'); });
+if (isIOS && !standalone()) $('#installBtn').hidden = false;
+$('#installBtn').addEventListener('click', async () => {
+  if (deferredInstall) { deferredInstall.prompt(); await deferredInstall.userChoice.catch(() => {}); deferredInstall = null; $('#installBtn').hidden = true; }
+  else if (isIOS) $('#iosTip').hidden = false;
+  else toast('Use your browser menu → Install app / Add to Home screen');
+});
+$('#iosClose').addEventListener('click', () => { $('#iosTip').hidden = true; });
+
+/* ---------- share (same card as ERGS Live) ---------- */
+const LIB_ITEM = { label: 'AI in School', url: BASE, file: 'ai-in-school-qr', desc: 'The ERGS staff AI newsletter library. Staff need the staff password to open it.', shareText: 'AI in School: A Teacher’s Guide – the ERGS staff AI newsletter. Staff password needed.' };
+function openShare(items) { if (!window.ERGSShare) return toast('Sharing isn’t available'); window.ERGSShare.open({ title: 'Share', crest: window.ERGS_CREST, items }); }
+$('#shareBtn').addEventListener('click', () => openShare([LIB_ITEM]));
+$('#shareIssueBtn').addEventListener('click', () => {
+  const id = location.hash.slice(7), i = allIssues().find(x => x.id === id); if (!i) return openShare([LIB_ITEM]);
+  openShare([{ label: 'Issue ' + i.n, url: BASE + '#issue-' + i.id, file: 'ai-in-school-issue-' + i.n, desc: `Issue ${i.n}: ${i.title}. Opens straight onto this issue (staff password needed).`, shareText: `AI in School – Issue ${i.n}: ${i.title}` }, LIB_ITEM]);
+});
 boot();
