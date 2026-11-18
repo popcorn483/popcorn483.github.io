@@ -43,7 +43,7 @@ let filt = { q: '', theme: '', tool: '' };
 
 function allIssues() {
   const o = CONTENT.orig.map(x => ({ ...x, id: 'w' + x.n, kind: 'img', imgs: ['img/w' + String(x.n).padStart(2, '0') + '.bin'], thumb: 'img/w' + String(x.n).padStart(2, '0') + '-t.bin', def: 'live' }));
-  const b = CONTENT.bank.map(x => ({ ...x, id: 'b' + x.n, kind: 'tpl', summary: x.aim, def: 'locked' }));
+  const b = CONTENT.bank.map(x => ({ ...x, id: 'b' + x.n, kind: 'img', imgs: Array.from({ length: x.pages || 2 }, (_, k) => `img/b${x.n}-${k + 1}.bin`), thumb: `img/b${x.n}-t.bin`, def: 'locked' }));
   const c = CUSTOM.map(x => ({ ...x, custom: true, def: 'locked' }));
   return [...o, ...b, ...c].sort((a, z) => a.n - z.n || String(a.id).localeCompare(z.id));
 }
@@ -76,12 +76,11 @@ $('#gateForm').addEventListener('submit', async e => {
     KEY = await deriveKey($('#pw').value.trim());
     if (!(await tryKey())) throw 0;
     const raw = b64e(new Uint8Array(await crypto.subtle.exportKey('raw', KEY)));
-    ($('#remember').checked ? LS : SS).set('ergsNL.k', raw);
+    LS.set('ergsNL.k', raw);   // enter it once – this device stays unlocked
     $('#gate').hidden = true; start();
   } catch (err) { $('#gateErr').textContent = 'That password isn’t right. Please try again.'; }
   btn.disabled = false;
 });
-$('#lockBtn').addEventListener('click', () => { LS.del('ergsNL.k'); SS.del('ergsNL.k'); location.hash = ''; location.reload(); });
 
 /* ---------- firebase ---------- */
 async function startFirebase() {
@@ -126,11 +125,14 @@ function start() {
 function route() { render(); window.scrollTo(0, 0); }
 function render() {
   if (!CONTENT) return;
+  if (location.hash === '#binder' && Binder.active) { Binder.refresh(); return; }
   const h = location.hash.slice(1);
-  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', (h === 'admin') === (a.dataset.nav === 'admin')));
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : h.startsWith('issue-') ? '' : 'library')));
   $('#adminLink').textContent = ADMIN ? 'Release desk' : (innerWidth < 620 ? 'Admin' : 'Staff admin');
-  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = true;
+  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = true;
+  document.body.classList.toggle('binder-on', h === 'binder');
   if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
+  else if (h === 'binder') { $('#binder').hidden = false; Binder.open(); }
   else if (h.startsWith('issue-')) { $('#reader').hidden = false; renderReader(h.slice(6)); }
   else { $('#library').hidden = false; renderLibrary(); }
 }
@@ -162,7 +164,7 @@ function cardHTML(i) {
   const st = status(i), locked = st !== 'live', mg = canManage();
   const sched = RELEASES[i.id]?.d;
   const badge = st === 'live' ? (i === latestIssue() ? '<span class="badge">Latest</span>' : '') :
-    st === 'sched' ? `<span class="badge sched">Out ${esc(fmtDate(sched))}</span>` : '<span class="badge locked">Coming soon</span>';
+    st === 'sched' ? `<span class="badge sched">Out ${esc(fmtDate(sched))}</span>` : '<span class="badge locked">Locked</span>';
   const quick = mg ? `<button class="btn small quick" data-quick="${esc(i.id)}">${locked ? 'Release' : 'Lock'}</button>` : '';
   const tools = (i.tools || []).map(t => `<span class="tool ${esc(t)}">${esc(t)}</span>`).join('');
   const inner = `${badge}<div class="cover">${locked && !mg ? miniCover({ ...i, title: 'Coming soon', kicker: i.theme }) : coverHTML(i)}</div>
@@ -175,7 +177,8 @@ function fmtDate(d) { if (!d) return ''; const x = new Date(d + 'T12:00:00'); re
 
 function renderLibrary() {
   const all = allIssues(), live = all.filter(i => status(i) === 'live'), soon = all.filter(i => status(i) !== 'live');
-  $('#stats').innerHTML = `<div class="stat"><b>${live.length}</b><span>issues released</span></div><div class="stat"><b>${soon.length}</b><span>coming soon</span></div><div class="stat"><b>${new Set(live.map(i => i.theme)).size}</b><span>themes covered</span></div>`;
+  $('#stats').innerHTML = `<div class="stat"><b>${live.length}</b><span>issues to explore</span></div><div class="stat"><b>${new Set(live.map(i => i.theme)).size}</b><span>themes covered</span></div>` +
+    (canManage() ? `<div class="stat"><b>${soon.length}</b><span>locked (only you see this)</span></div>` : `<div class="stat"><b>5</b><span>minutes to read</span></div>`);
   const L = latestIssue();
   $('#latest').hidden = !L;
   if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">New this week · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
@@ -189,9 +192,9 @@ function renderLibrary() {
     $('#svOn')?.addEventListener('click', () => { STAFFVIEW = true; render(); });
     $('#relNext')?.addEventListener('click', () => setRelease(next.id, { s: 'live' }, `Issue ${next.n} released`));
   }
-  const liveShown = live.filter(matches).reverse(), soonShown = soon.filter(matches);
+  const liveShown = live.filter(matches).reverse(), soonShown = canManage() ? soon.filter(matches) : [];   // staff never see what's still to come
   const g = $('#grid');
-  g.innerHTML = liveShown.map(cardHTML).join('') + (soonShown.length ? `<h2 style="grid-column:1/-1;font:800 20px var(--head);color:var(--navy);margin:16px 0 0">Coming soon</h2>` + soonShown.map(cardHTML).join('') : '');
+  g.innerHTML = liveShown.map(cardHTML).join('') + (soonShown.length ? `<h2 style="grid-column:1/-1;font:800 20px var(--head);color:var(--navy);margin:16px 0 0">Not yet released <small style="font:600 13px var(--body);color:var(--muted)">– only you can see these</small></h2>` + soonShown.map(cardHTML).join('') : '');
   $('#empty').hidden = liveShown.length + soonShown.length > 0;
   hydrateImgs(g);
   g.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', e => {
@@ -244,7 +247,7 @@ function renderReader(id) {
   const sheet = $('#sheet');
   if (!i) { sheet.innerHTML = '<p class="empty">Issue not found – it may still be loading.</p>'; return; }
   const st = status(i);
-  if (st !== 'live' && !canManage()) { sheet.innerHTML = '<div class="info"><h1>Coming soon</h1><p>This issue hasn’t been released yet.</p><a class="btn" href="#">Back to the library</a></div>'; $('#lockNote').hidden = true; return; }
+  if (st !== 'live' && !canManage()) { sheet.innerHTML = '<div class="info"><h1>This issue isn’t available</h1><p>Have a look through the library for the latest issues.</p><a class="btn" href="#">Back to the library</a></div>'; $('#lockNote').hidden = true; return; }
   $('#lockNote').hidden = st === 'live';
   $('#lockNote').textContent = st === 'sched' ? `Preview – scheduled for release on ${fmtDate(RELEASES[i.id].d)}. Staff can’t see this yet.` : 'Preview – this issue is locked. Staff can’t see it yet.';
   const visible = all.filter(x => status(x) === 'live' || canManage());
@@ -318,7 +321,7 @@ function renderAdmin() {
   const lines = k => esc((e[k] || []).join('\n'));
   w.innerHTML = `
   <div class="panel"><div class="row"><h2 style="margin:0">Release desk</h2><span class="spacer"></span><small class="muted">Signed in as ${esc(AUTHUSER.email)}</small><button class="btn small" id="so">Sign out</button></div>
-    <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only see titles and “Coming soon” for anything else.</p>
+    <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only ever see released issues – nothing about what’s still to come.</p>
     <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Add a new issue</button></div>
   </div>
   <div class="panel" id="formPanel"${editing || formKind === 'open' ? '' : ' hidden'}>
@@ -516,4 +519,146 @@ setInterval(checkUpdate, 5 * 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
 window.addEventListener('online', checkUpdate);
 if (SS.get('ergsNL.updated')) { SS.del('ergsNL.updated'); setTimeout(() => toast('Updated to the latest version'), 800); }
+
+/* ---------- binder: flip through every released issue like a real book ---------- */
+const Binder = (() => {
+  let pages = [], spread = 0, single = false, busy = false, built = false, sig = '';
+  const st = () => $('#bkStage');
+  const issuesInBinder = () => allIssues().filter(i => status(i) === 'live' || canManage());
+  function buildPages() {
+    const list = issuesInBinder();
+    const P = [{ kind: 'cover' }, { kind: 'contents', list }];
+    list.forEach(i => {
+      const srcs = i.imgs || i.pageDocs || [];
+      if (!srcs.length) P.push({ kind: 'info', issue: i }); // template issues without page images
+      srcs.forEach((src, k) => P.push({ kind: 'img', issue: i, src, k, of: srcs.length }));
+    });
+    // contents page numbers (1-based, cover = page 1)
+    list.forEach(i => { i._page = P.findIndex(p => p.issue === i) + 1; });
+    P.push({ kind: 'back' });
+    pages = P;
+    const sel = $('#bkJump');
+    sel.innerHTML = '<option value="">Jump to issue…</option>' + list.map(i => `<option value="${i._page - 1}">Issue ${i.n}: ${esc(i.title)}</option>`).join('');
+  }
+  function pageEl(idx) {
+    const el = document.createElement('div'); el.className = 'bk-page';
+    const p = pages[idx];
+    if (!p) { el.classList.add('blank'); return el; }
+    if (p.kind === 'cover') {
+      el.classList.add('cover');
+      el.innerHTML = `<div class="bk-cv"><img src="${window.ERGS_CREST || ''}" alt=""><p class="bk-sch">Enniskillen Royal Grammar School</p><h1>AI in School</h1><h2>A Teacher’s Guide</h2><div class="bk-rule"></div><p>Whole-School AI Skills CPD Portfolio</p><p class="bk-small">${issuesInBinder().length} issues · for staff use</p></div>`;
+    } else if (p.kind === 'contents') {
+      el.classList.add('contents');
+      el.innerHTML = `<h3>Contents</h3><ol>${p.list.map(i => `<li data-go="${i._page - 1}"><b>${i.n}</b><span>${esc(i.title)}${status(i) !== 'live' ? ' <em>locked</em>' : ''}</span><i>${i._page}</i></li>`).join('')}</ol>`;
+      el.querySelectorAll('[data-go]').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); go(+li.dataset.go); }));
+    } else if (p.kind === 'back') {
+      el.classList.add('cover', 'back');
+      el.innerHTML = `<div class="bk-cv"><img src="${window.ERGS_CREST || ''}" alt=""><h2>Keep learning</h2><div class="bk-rule"></div><p>New issues are released through the term.<br>Approved tools: Copilot · Gemini · NotebookLM</p></div>`;
+    } else if (p.kind === 'info') {
+      el.innerHTML = `<div class="bk-info"><small>Issue ${p.issue.n}</small><h3>${esc(p.issue.title)}</h3><p>${esc(p.issue.summary || '')}</p><a href="#issue-${esc(p.issue.id)}">Open this issue</a></div>`;
+    } else {
+      const img = document.createElement('img'); img.alt = `Issue ${p.issue.n}, page ${p.k + 1}`; img.draggable = false;
+      (p.issue.custom ? customPageImg(p.src) : fileImg(p.src)).then(u => { img.src = u; }).catch(() => {});
+      el.appendChild(img);
+      if (status(p.issue) !== 'live') { const r = document.createElement('span'); r.className = 'bk-lock'; r.textContent = 'Locked – only you can see this'; el.appendChild(r); }
+    }
+    el.dataset.n = idx + 1;
+    return el;
+  }
+  function preload(i) { for (let k = i - 2; k <= i + 4; k++) { const p = pages[k]; if (p && p.kind === 'img') (p.issue.custom ? customPageImg(p.src) : fileImg(p.src)).catch(() => {}); } }
+  // spread s: left = pages[2s-1], right = pages[2s]
+  const maxSpread = () => single ? pages.length - 1 : Math.ceil((pages.length - 1) / 2);
+  const leftIdx = s => 2 * s - 1, rightIdx = s => 2 * s;
+  function layout() {
+    const box = $('#bkArea').getBoundingClientRect();
+    single = box.width < 760;
+    const ratio = 1.4142, availH = Math.max(240, innerHeight - box.top - 24), availW = box.width - 16;
+    let pw = Math.min(availH / ratio, single ? availW : availW / 2);
+    pw = Math.floor(pw); const ph = Math.floor(pw * ratio);
+    const s = st(); s.style.setProperty('--pw', pw + 'px'); s.style.setProperty('--ph', ph + 'px');
+    s.classList.toggle('single', single);
+  }
+  function draw() {
+    const s = st(); s.innerHTML = '';
+    if (single) {
+      const slot = document.createElement('div'); slot.className = 'bk-slot r'; slot.appendChild(pageEl(spread)); s.appendChild(slot);
+      preload(spread);
+    } else {
+      const L = document.createElement('div'); L.className = 'bk-slot l'; L.appendChild(pageEl(leftIdx(spread)));
+      const R = document.createElement('div'); R.className = 'bk-slot r'; R.appendChild(pageEl(rightIdx(spread)));
+      s.append(L, R); s.classList.toggle('closed', spread === 0); s.classList.toggle('end', rightIdx(spread) >= pages.length);
+      preload(rightIdx(spread));
+    }
+    updateBar();
+  }
+  function curIssue() { const i = single ? spread : Math.max(leftIdx(spread), 0); const p = pages[i] || pages[i + 1]; return p && p.issue; }
+  function updateBar() {
+    const total = pages.length;
+    const label = single ? `Page ${spread + 1} of ${total}` : spread === 0 ? `Cover · ${total} pages` : `Pages ${leftIdx(spread) + 1}${rightIdx(spread) < total ? '–' + (rightIdx(spread) + 1) : ''} of ${total}`;
+    $('#bkPos').textContent = label;
+    $('#bkPrev').disabled = spread <= 0; $('#bkNext').disabled = spread >= maxSpread();
+    const iss = curIssue(); $('#bkOpen').hidden = !iss; if (iss) $('#bkOpen').href = '#issue-' + iss.id;
+    $('#bkRange').max = maxSpread(); $('#bkRange').value = spread;
+  }
+  function flip(dir) {
+    if (busy) return;
+    const target = spread + dir; if (target < 0 || target > maxSpread()) return;
+    busy = true;
+    const s = st(), f = document.createElement('div'), front = document.createElement('div'), back = document.createElement('div');
+    f.className = 'bk-flip'; front.className = 'bk-face front'; back.className = 'bk-face back';
+    const shade = document.createElement('div'); shade.className = 'bk-shade';
+    if (single) {
+      const slot = s.querySelector('.bk-slot');
+      if (dir > 0) { front.appendChild(pageEl(spread)); slot.replaceChildren(pageEl(target)); f.classList.add('r'); }
+      else { front.appendChild(pageEl(target)); f.classList.add('r', 'from'); }
+      back.appendChild(Object.assign(document.createElement('div'), { className: 'bk-page paper' }));
+    } else if (dir > 0) {
+      front.appendChild(pageEl(rightIdx(spread))); back.appendChild(pageEl(leftIdx(target)));
+      s.querySelector('.bk-slot.r').replaceChildren(pageEl(rightIdx(target))); f.classList.add('r');
+      s.classList.remove('end'); if (rightIdx(target) >= pages.length) s.classList.add('end');
+      s.classList.remove('closed');
+    } else {
+      front.appendChild(pageEl(leftIdx(spread))); back.appendChild(pageEl(rightIdx(target)));
+      s.querySelector('.bk-slot.l').replaceChildren(pageEl(leftIdx(target))); f.classList.add('l');
+    }
+    f.append(front, back, shade); s.appendChild(f);
+    requestAnimationFrame(() => requestAnimationFrame(() => f.classList.add('go')));
+    const done = () => { spread = target; busy = false; draw(); };
+    f.addEventListener('transitionend', e => { if (e.target === f) done(); }, { once: false });
+    setTimeout(() => { if (busy) done(); }, 1100);
+  }
+  function go(pageIndex) {
+    spread = single ? pageIndex : Math.ceil(pageIndex / 2);
+    spread = Math.max(0, Math.min(spread, maxSpread())); draw();
+  }
+  let wired = false;
+  function wire() {
+    if (wired) return; wired = true;
+    $('#bkPrev').addEventListener('click', () => flip(-1));
+    $('#bkNext').addEventListener('click', () => flip(1));
+    $('#bkJump').addEventListener('change', e => { if (e.target.value !== '') go(+e.target.value); e.target.value = ''; });
+    $('#bkRange').addEventListener('input', e => { spread = +e.target.value; draw(); });
+    $('#bkFull').addEventListener('click', () => { const el = $('#binder'); (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen?.())?.catch?.(() => {}); });
+    document.addEventListener('fullscreenchange', () => setTimeout(() => { layout(); draw(); }, 120));
+    st().addEventListener('click', e => {
+      if (e.target.closest('a,[data-go]')) return;
+      const r = st().getBoundingClientRect(); flip(e.clientX - r.left > r.width / 2 ? 1 : -1);
+    });
+    let x0 = null, y0 = null;
+    st().addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    st().addEventListener('touchend', e => {
+      if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); flip(dx < 0 ? 1 : -1); }
+    });
+    document.addEventListener('keydown', e => { if (location.hash !== '#binder') return; if (e.key === 'ArrowRight') flip(1); if (e.key === 'ArrowLeft') flip(-1); });
+    let rt; window.addEventListener('resize', () => { if (location.hash !== '#binder') return; clearTimeout(rt); rt = setTimeout(() => { const wasSingle = single; const pIdx = single ? spread : Math.max(0, leftIdx(spread)); layout(); if (wasSingle !== single) go(pIdx); else draw(); }, 150); });
+  }
+  return {
+    active: false,
+    open() { this.active = true; wire(); const s2 = JSON.stringify(issuesInBinder().map(i => i.id + status(i))); if (!built || s2 !== sig) { buildPages(); built = true; sig = s2; spread = 0; } layout(); draw(); document.title = 'Binder · AI in School'; },
+    refresh() { const s2 = JSON.stringify(issuesInBinder().map(i => i.id + status(i))); if (s2 !== sig) { sig = s2; buildPages(); spread = Math.min(spread, maxSpread()); layout(); draw(); } }
+  };
+})();
+window.addEventListener('hashchange', () => { if (location.hash !== '#binder') Binder.active = false; });
+
 boot();

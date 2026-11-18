@@ -3,7 +3,7 @@
 The ERGS staff AI newsletter library. Live at **https://popcorn483.github.io/ai-newsletter/**
 
 ## Staff
-Open the link and enter the staff password once. Tick "Remember me" to stay unlocked on that device; **Lock** in the top bar forgets it.
+Open the link and enter the staff password once – that device then stays unlocked. Staff only ever see released issues. **Binder** lets anyone flick through every released issue like a book.
 
 ## Releasing issues (editor only)
 1. Open the site and click **Staff admin**....

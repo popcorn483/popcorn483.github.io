@@ -1,6 +1,6 @@
 // AI in School: lets phones install the library as an app and read released issues offline.
 // Pages and code come fresh from the network when online; issue files (encrypted) are kept for offline reading.
-const CACHE = 'ainl-v2';
+const CACHE = 'ainl-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'crest.js', 'share.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));

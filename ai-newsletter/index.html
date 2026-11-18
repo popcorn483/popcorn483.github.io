@@ -23,10 +23,9 @@
     <img class="crest" id="gateCrest" alt="">
     <p class="eyebrow">Enniskillen Royal Grammar School</p>
     <h1>AI in School<span>A Teacher's Guide</span></h1>
-    <p class="muted">Whole-School AI Skills CPD Portfolio. Enter the staff password to open the newsletter library.</p>
+    <p class="muted">Whole-School AI Skills CPD Portfolio. Enter the staff password once – this device will remember it.</p>
     <label class="sr" for="pw">Staff password</label>
     <input id="pw" type="password" placeholder="Staff password" autocomplete="current-password" required>
-    <label class="check"><input type="checkbox" id="remember" checked> Remember me on this device</label>
     <button class="btn primary wide" type="submit">Open the library</button>
     <p class="err" id="gateErr" role="alert"></p>
   </form>
@@ -38,10 +37,10 @@
       <a href="#" class="brand"><img class="crest" id="mastCrest" alt=""><span><b>AI in School</b><small>A Teacher's Guide · ERGS</small></span></a>
       <nav class="mast-nav">
         <a href="#" data-nav="library">Library</a>
+        <a href="#binder" data-nav="binder">Binder</a>
         <a href="#admin" data-nav="admin" id="adminLink">Release desk</a>
         <button class="linkbtn" id="installBtn" hidden>Install app</button>
         <button class="linkbtn" id="shareBtn">Share</button>
-        <button class="linkbtn" id="lockBtn" title="Forget the password on this device">Lock</button>
       </nav>
     </div>
   </header>
@@ -51,7 +50,7 @@
       <div class="hero-text">
         <p class="eyebrow light">Whole-School AI Skills CPD Portfolio</p>
         <h1>Practical AI for busy teachers</h1>
-        <p>A new issue is released every few weeks: one skill, one prompt to try, and one challenge for your department.</p>
+        <p>Short, practical ideas for using AI in your teaching – one skill, one prompt to try and one small challenge in each issue. Dip in whenever it suits you.</p>
         <div class="stats" id="stats"></div>
       </div>
       <a class="latest" id="latest" href="#"></a>
@@ -78,6 +77,24 @@
     </div>
     <div id="lockNote" class="locknote" hidden></div>
     <article id="sheet" class="sheet-wrap"></article>
+  </main>
+
+  <main id="binder" class="view" hidden>
+    <div class="bk-bar">
+      <a href="#" class="btn ghost small">← Library</a>
+      <select id="bkJump" aria-label="Jump to issue"></select>
+      <span class="spacer"></span>
+      <span id="bkPos" class="bk-pos"></span>
+      <a id="bkOpen" class="btn small" href="#">Open issue</a>
+      <button class="btn small" id="bkFull" title="Full screen">⛶</button>
+    </div>
+    <div id="bkArea" class="bk-area">
+      <button class="bk-nav prev" id="bkPrev" aria-label="Previous page">‹</button>
+      <div id="bkStage" class="bk-stage"></div>
+      <button class="bk-nav next" id="bkNext" aria-label="Next page">›</button>
+    </div>
+    <input type="range" id="bkRange" class="bk-range" min="0" value="0" aria-label="Page">
+    <p class="bk-hint">Swipe, tap the page edges or use the arrow keys to turn pages.</p>
   </main>
 
   <main id="admin" class="view" hidden>
