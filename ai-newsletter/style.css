@@ -306,3 +306,5 @@ body.binder-on .foot{display:none}
 }
 body{overflow-x:clip}
 @media screen and (max-width:620px){.chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}.chip{white-space:nowrap}.iostip{border-radius:8px}}
+td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
+@media screen and (max-width:700px){td.acts{white-space:normal}}

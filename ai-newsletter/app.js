@@ -44,8 +44,18 @@ let filt = { q: '', theme: '', tool: '' };
 function allIssues() {
   const o = CONTENT.orig.map(x => ({ ...x, id: 'w' + x.n, kind: 'img', imgs: ['img/w' + String(x.n).padStart(2, '0') + '.bin'], thumb: 'img/w' + String(x.n).padStart(2, '0') + '-t.bin', def: 'live' }));
   const b = CONTENT.bank.map(x => ({ ...x, id: 'b' + x.n, kind: 'img', imgs: Array.from({ length: x.pages || 2 }, (_, k) => `img/b${x.n}-${k + 1}.bin`), thumb: `img/b${x.n}-t.bin`, def: 'locked' }));
-  const c = CUSTOM.map(x => ({ ...x, custom: true, def: 'locked' }));
-  return [...o, ...b, ...c].sort((a, z) => a.n - z.n || String(a.id).localeCompare(z.id));
+  // edits to built-in issues are stored as override documents (encrypted) and merged in here
+  const ov = {}; CUSTOM.filter(x => x.overrides).forEach(x => { ov[x.overrides] = x; });
+  const merge = base => {
+    const x = ov[base.id]; if (!x) return base;
+    const m = { ...base, edited: true, ovDocId: x.docId };
+    for (const k of ['n', 'title', 'theme', 'summary', 'link']) if (x[k] !== undefined && x[k] !== '' && !(k === 'n' && !x[k])) m[k] = x[k];
+    if (x.tools && x.tools.length) m.tools = x.tools;
+    if (x.pageDocs && x.pageDocs.length) { m.imgs = undefined; m.pageDocs = x.pageDocs; m.fsPages = true; if (x.thumb) m.thumb = x.thumb; m.ovPages = x.pageDocs; }
+    return m;
+  };
+  const c = CUSTOM.filter(x => !x.overrides).map(x => ({ ...x, custom: true, fsPages: true, def: 'locked' }));
+  return [...o.map(merge), ...b.map(merge), ...c].sort((a, z) => a.n - z.n || String(a.id).localeCompare(z.id));
 }
 function status(i) {
   const r = RELEASES[i.id];
@@ -176,7 +186,7 @@ function latestIssue() { const live = allIssues().filter(i => status(i) === 'liv
 function fmtDate(d) { if (!d) return ''; const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
 
 function renderLibrary() {
-  const all = allIssues(), live = all.filter(i => status(i) === 'live'), soon = all.filter(i => status(i) !== 'live');
+  const all = allIssues(), live = all.filter(i => status(i) === 'live'), soon = all.filter(i => status(i) !== 'live' && status(i) !== 'removed');
   $('#stats').innerHTML = `<div class="stat"><b>${live.length}</b><span>issues to explore</span></div><div class="stat"><b>${new Set(live.map(i => i.theme)).size}</b><span>themes covered</span></div>` +
     (canManage() ? `<div class="stat"><b>${soon.length}</b><span>locked (only you see this)</span></div>` : `<div class="stat"><b>5</b><span>minutes to read</span></div>`);
   const L = latestIssue();
@@ -250,12 +260,13 @@ function renderReader(id) {
   if (st !== 'live' && !canManage()) { sheet.innerHTML = '<div class="info"><h1>This issue isn’t available</h1><p>Have a look through the library for the latest issues.</p><a class="btn" href="#">Back to the library</a></div>'; $('#lockNote').hidden = true; return; }
   $('#lockNote').hidden = st === 'live';
   $('#lockNote').textContent = st === 'sched' ? `Preview – scheduled for release on ${fmtDate(RELEASES[i.id].d)}. Staff can’t see this yet.` : 'Preview – this issue is locked. Staff can’t see it yet.';
-  const visible = all.filter(x => status(x) === 'live' || canManage());
+  const visible = all.filter(x => status(x) === 'live' || (canManage() && status(x) !== 'removed'));
   const idx = visible.indexOf(i);
   $('#prevBtn').disabled = idx <= 0; $('#nextBtn').disabled = idx >= visible.length - 1;
   $('#prevBtn').onclick = () => { location.hash = 'issue-' + visible[idx - 1].id; };
   $('#nextBtn').onclick = () => { location.hash = 'issue-' + visible[idx + 1].id; };
   $('#printBtn').onclick = () => window.print();
+  $('#editIssueBtn').hidden = !canManage(); $('#editIssueBtn').onclick = () => startEdit(i);
   document.title = `Issue ${i.n}: ${i.title} · AI in School`;
   if (i.kind === 'tpl') sheet.innerHTML = tplHTML(i);
   else {
@@ -264,7 +275,7 @@ function renderReader(id) {
       pages.map((p, n) => `<img class="page-img" alt="Issue ${i.n} page ${n + 1}" data-p="${n}">`).join('');
     sheet.querySelectorAll('img[data-p]').forEach(img => {
       const p = pages[+img.dataset.p];
-      (i.custom ? customPageImg(p) : fileImg(p)).then(u => { img.src = u; }).catch(() => { img.alt = 'Page could not be loaded'; });
+      (i.fsPages ? customPageImg(p) : fileImg(p)).then(u => { img.src = u; }).catch(() => { img.alt = 'Page could not be loaded'; });
     });
   }
   sheet.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
@@ -284,6 +295,14 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 
 /* ---------- admin ---------- */
 let editing = null, formKind = 'tpl', pendingPages = null, pendingThumb = null;
+function startEdit(i) {
+  if (!i) return;
+  if (i.custom) editing = { ...CUSTOM.find(c => c.id === i.id) };
+  else editing = { kind: 'img', baseId: i.id, docId: i.ovDocId, n: i.n, title: i.title, theme: i.theme, tools: i.tools, summary: i.summary, link: i.link, pageDocs: i.ovPages || [], thumb: i.ovPages ? i.thumb : '' };
+  formKind = editing.kind; pendingPages = pendingThumb = null;
+  if (location.hash !== '#admin') location.hash = 'admin'; else renderAdmin();
+  setTimeout(() => $('#formPanel')?.scrollIntoView({ behavior: 'smooth' }), 80);
+}
 function renderAdmin() {
   const w = $('#adminWrap');
   if (!AUTH) { w.innerHTML = '<div class="panel"><h2>Release desk</h2><p>Connecting…</p></div>'; return; }
@@ -308,12 +327,15 @@ function renderAdmin() {
     return;
   }
   const all = allIssues();
-  const rows = all.map(i => {
+  const removed = all.filter(i => status(i) === 'removed');
+  const rows = all.filter(i => status(i) !== 'removed').map(i => {
     const r = RELEASES[i.id] || {}, st = status(i), sel = r.s || i.def;
-    return `<tr class="${st}"><td><b>${i.n}</b></td><td><a href="#issue-${esc(i.id)}">${esc(i.title)}</a><br><small class="muted">${esc(i.theme || '')}${i.custom ? ' · added by you' : i.kind === 'tpl' ? ' · issue bank' : ' · original PDF'}</small></td>
+    const src = i.custom ? 'uploaded by you' : i.id.startsWith('b') ? 'new issue' : 'original';
+    const acts = `<button class="btn small" data-edit="${esc(i.id)}">Edit</button> ` + (i.custom ? `<button class="btn small danger" data-del="${esc(i.id)}">Delete</button>` : `<button class="btn small danger" data-rm="${esc(i.id)}">Remove</button>`) + (i.edited ? ` <button class="btn small" data-undo="${esc(i.id)}">Undo edits</button>` : '');
+    return `<tr class="${st}"><td><b>${i.n}</b></td><td><a href="#issue-${esc(i.id)}">${esc(i.title)}</a><br><small class="muted">${esc(i.theme || '')} · ${src}${i.edited ? ' · edited' : ''}</small></td>
       <td><select data-s="${esc(i.id)}"><option value="live"${sel === 'live' ? ' selected' : ''}>Released</option><option value="locked"${sel === 'locked' ? ' selected' : ''}>Locked</option><option value="sched"${sel === 'sched' ? ' selected' : ''}>Scheduled</option></select></td>
       <td>${sel === 'sched' ? `<input type="date" data-d="${esc(i.id)}" value="${esc(r.d || '')}">` : ''}</td>
-      <td>${i.custom ? `<button class="btn small" data-edit="${esc(i.id)}">Edit</button> <button class="btn small danger" data-del="${esc(i.id)}">Delete</button>` : ''}</td></tr>`;
+      <td class="acts">${acts}</td></tr>`;
   }).join('');
   const nextN = Math.max(...all.map(i => i.n)) + 1;
   const e = editing || {};
@@ -322,12 +344,12 @@ function renderAdmin() {
   w.innerHTML = `
   <div class="panel"><div class="row"><h2 style="margin:0">Release desk</h2><span class="spacer"></span><small class="muted">Signed in as ${esc(AUTHUSER.email)}</small><button class="btn small" id="so">Sign out</button></div>
     <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only ever see released issues – nothing about what’s still to come.</p>
-    <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Add a new issue</button></div>
+    <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Upload a new issue</button></div>
   </div>
   <div class="panel" id="formPanel"${editing || formKind === 'open' ? '' : ' hidden'}>
-    <h2>${editing && editing.docId ? 'Edit issue' : 'Add a new issue'}</h2>
-    <p class="muted">Upload a finished PDF (or image), or type it into the house template and it’s designed for you.</p>
-    <div class="seg" id="kindSeg"><button data-k="img" class="${(e.kind || 'img') === 'img' ? 'on' : ''}">Upload PDF / image</button><button data-k="tpl" class="${e.kind === 'tpl' ? 'on' : ''}">Use the template</button></div>
+    <h2>${editing && (editing.docId || editing.baseId) ? 'Edit issue ' + esc(editing.n) : 'Upload a new issue'}</h2>
+    <p class="muted">${editing && editing.baseId ? 'Change the details below, or upload a replacement PDF. Leave the file empty to keep the current pages. You can undo your edits at any time.' : 'Upload a finished PDF (or image), or type it into the house template and it’s designed for you.'}</p>
+    <div class="seg" id="kindSeg"${editing && editing.baseId ? ' hidden' : ''}><button data-k="img" class="${(e.kind || 'img') === 'img' ? 'on' : ''}">Upload PDF / image</button><button data-k="tpl" class="${e.kind === 'tpl' ? 'on' : ''}">Use the template</button></div>
     <form id="issueForm" style="margin-top:14px">
       <div class="row">
         <div class="field" style="flex:0 1 110px"><label>Issue no.</label><input name="n" type="number" min="1" required value="${val('n', nextN)}"></div>
@@ -336,12 +358,12 @@ function renderAdmin() {
       <div class="row">
         <div class="field"><label>Theme</label><select name="theme">${THEMES.map(t => `<option${e.theme === t ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
         <div class="field"><label>Tools</label><div class="row">${['Gemini', 'Copilot', 'NotebookLM'].map(t => `<label class="check" style="margin:0"><input type="checkbox" name="tools" value="${t}"${(e.tools || []).includes(t) ? ' checked' : ''}> ${t}</label>`).join('')}</div></div>
-        <div class="field"><label>When saved</label><select name="initial"><option value="locked">Keep locked</option><option value="live">Release now</option></select></div>
+        <div class="field"><label>When saved</label><select name="initial"><option value="locked">${editing && (editing.docId || editing.baseId) ? 'No change to release' : 'Keep locked for now'}</option><option value="live">Release now</option></select></div>
       </div>
       <div class="field"><label>One-line summary (shown on the card)</label><input name="summary" value="${val('summary')}"></div>
       <div class="field"><label>Link (optional – e.g. a Drive or SharePoint copy)</label><input name="link" type="url" value="${val('link')}"></div>
       <div id="imgFields">
-        <div class="field"><label>PDF or image file</label><input type="file" id="fileIn" accept="application/pdf,image/*"><small>${editing && editing.kind === 'img' ? 'Leave empty to keep the current pages. ' : ''}Each page is stored encrypted. Multi-page PDFs are fine.</small></div>
+        <div class="field"><label>PDF or image file</label><input type="file" id="fileIn" accept="application/pdf,image/*"><small>${editing && (editing.baseId || (editing.kind === 'img' && editing.docId)) ? 'Leave empty to keep the current pages. ' : ''}Each page is stored encrypted. Multi-page PDFs are fine.</small></div>
         <div id="filePrev" class="row"></div>
       </div>
       <div id="tplFields">
@@ -364,19 +386,27 @@ function renderAdmin() {
       <div class="row"><button class="btn primary" type="submit" id="saveBtn">Save issue</button><button class="btn" type="button" id="cancelBtn">Cancel</button><span id="saveMsg" class="muted"></span></div>
     </form>
   </div>
-  <div class="panel"><h2>All issues</h2><table class="rel"><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Release date</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  <div class="panel"><h2>All issues</h2><p class="muted">Edit any issue (title, number, theme or a replacement PDF), remove it, or upload a new one.</p><table class="rel"><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Release date</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  ${removed.length ? `<div class="panel"><h2>Removed issues</h2><p class="muted">Hidden from everyone. Restore puts an issue back as locked.</p><table class="rel"><tbody>${removed.map(i => `<tr><td><b>${i.n}</b></td><td>${esc(i.title)}</td><td class="acts"><button class="btn small" data-restore="${esc(i.id)}">Restore</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
   wireAdmin(all);
 }
 function wireAdmin(all) {
   $('#so').addEventListener('click', () => signOut(AUTH));
-  $('#relNext2').addEventListener('click', () => { const n = all.find(i => status(i) !== 'live'); if (n) setRelease(n.id, { s: 'live' }, `Issue ${n.n} released`); else toast('Everything is already released'); });
+  $('#relNext2').addEventListener('click', () => { const n = all.find(i => status(i) !== 'live' && status(i) !== 'removed'); if (n) setRelease(n.id, { s: 'live' }, `Issue ${n.n} released`); else toast('Everything is already released'); });
   $('#addBtn').addEventListener('click', () => { editing = { kind: 'img' }; formKind = 'img'; pendingPages = pendingThumb = null; renderAdmin(); $('#formPanel').scrollIntoView({ behavior: 'smooth' }); });
   document.querySelectorAll('[data-s]').forEach(s => s.addEventListener('change', () => {
     const id = s.dataset.s, v = s.value, cur = RELEASES[id] || {};
     setRelease(id, v === 'sched' ? { s: 'sched', d: cur.d || today() } : { s: v }, v === 'live' ? 'Released' : v === 'locked' ? 'Locked' : 'Pick a release date');
   }));
   document.querySelectorAll('[data-d]').forEach(d => d.addEventListener('change', () => setRelease(d.dataset.d, { s: 'sched', d: d.value }, 'Scheduled for ' + fmtDate(d.value))));
-  document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { editing = { ...CUSTOM.find(c => c.id === b.dataset.edit) }; formKind = editing.kind; pendingPages = pendingThumb = null; renderAdmin(); $('#formPanel').scrollIntoView({ behavior: 'smooth' }); }));
+  document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => startEdit(all.find(i => i.id === b.dataset.edit))));
+  const twice = (b, label, fn) => { let armed = false; b.addEventListener('click', async () => { if (!armed) { armed = true; const t = b.textContent; b.textContent = label; setTimeout(() => { armed = false; b.textContent = t; }, 3000); return; } await fn(); }); };
+  document.querySelectorAll('[data-rm]').forEach(b => twice(b, 'Click again to remove', () => { const i = all.find(x => x.id === b.dataset.rm); setRelease(i.id, { s: 'removed' }, `Issue ${i.n} removed – restore it any time`); }));
+  document.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', () => setRelease(b.dataset.restore, { s: 'locked' }, 'Restored (locked)')));
+  document.querySelectorAll('[data-undo]').forEach(b => twice(b, 'Click again to undo', async () => {
+    const i = all.find(x => x.id === b.dataset.undo);
+    try { for (const p of i.ovPages || []) await deleteDoc(doc(DB, 'newsletterImgs', p)); await deleteDoc(doc(DB, 'newsletterIssues', i.ovDocId)); toast('Back to the original version'); } catch (e) { toast('Couldn’t undo: ' + (e.code || e.message)); }
+  }));
   document.querySelectorAll('[data-del]').forEach(b => {
     let armed = false;
     b.addEventListener('click', async () => {
@@ -437,11 +467,11 @@ async function saveIssue(ev) {
   ev.preventDefault();
   const fd = new FormData(ev.target), g = k => (fd.get(k) || '').toString().trim(), ln = k => g(k).split('\n').map(s => s.trim()).filter(Boolean);
   const msg = $('#saveMsg'), btn = $('#saveBtn');
-  const docId = editing?.docId || doc(collection(DB, 'newsletterIssues')).id;
+  const docId = editing?.docId || (editing?.baseId ? 'ov-' + editing.baseId : doc(collection(DB, 'newsletterIssues')).id);
   const base = { n: +g('n'), title: g('title'), theme: g('theme'), tools: fd.getAll('tools'), summary: g('summary'), link: g('link'), kind: formKind };
   let data;
   if (formKind === 'img') {
-    if (!pendingPages && !(editing?.kind === 'img' && editing.pageDocs?.length)) { msg.textContent = 'Choose a PDF or image first.'; return; }
+    if (!pendingPages && !editing?.baseId && !(editing?.kind === 'img' && editing.pageDocs?.length)) { msg.textContent = 'Choose a PDF or image first.'; return; }
     data = { ...base, pageDocs: editing?.pageDocs || [], thumb: editing?.thumb || '' };
   } else {
     data = { ...base, kicker: g('kicker'), difficulty: g('difficulty'), read: g('read'), saved: g('saved'), savedPer: g('savedPer'), aim: g('aim'), intro: g('intro'), prompt: g('prompt'), tip: g('tip'), ideasTitle: g('ideasTitle'), ideas: ln('ideas'), challenge: g('challenge'), bad: { p: g('badp'), r: g('badr') }, good: { p: g('goodp'), r: g('goodr') }, dos: ln('dos'), donts: ln('donts'), key: g('key') };
@@ -455,10 +485,11 @@ async function saveIssue(ev) {
       for (const o of old) if (!ids.includes(o)) await deleteDoc(doc(DB, 'newsletterImgs', o)).catch(() => {});
       data.pageDocs = ids; data.thumb = pendingThumb; [...imgCache.keys()].filter(k => k.startsWith('fs:' + docId)).forEach(k => imgCache.delete(k));
     }
-    delete data.id; delete data.docId; delete data.custom;
+    delete data.id; delete data.docId; delete data.custom; if (editing?.baseId) data.overrides = editing.baseId;
     await setDoc(doc(DB, 'newsletterIssues', docId), { enc: await encJSON(data), updated: serverTimestamp() });
-    if (!editing?.docId) setRelease('c' + docId, { s: g('initial') === 'live' ? 'live' : 'locked' });
-    else if (g('initial') === 'live') setRelease('c' + docId, { s: 'live' });
+    const relId = editing?.baseId || ('c' + docId);
+    if (!editing?.docId && !editing?.baseId) setRelease(relId, { s: g('initial') === 'live' ? 'live' : 'locked' });
+    else if (g('initial') === 'live') setRelease(relId, { s: 'live' });
     toast(`Issue ${data.n} saved`); editing = null; pendingPages = pendingThumb = null; formKind = 'tpl'; renderAdmin();
   } catch (e) { console.warn(e); msg.textContent = 'Couldn’t save: ' + (e.code || e.message); btn.disabled = false; }
 }
@@ -524,7 +555,7 @@ if (SS.get('ergsNL.updated')) { SS.del('ergsNL.updated'); setTimeout(() => toast
 const Binder = (() => {
   let pages = [], spread = 0, single = false, busy = false, built = false, sig = '';
   const st = () => $('#bkStage');
-  const issuesInBinder = () => allIssues().filter(i => status(i) === 'live' || canManage());
+  const issuesInBinder = () => allIssues().filter(i => status(i) === 'live' || (canManage() && status(i) !== 'removed'));
   function buildPages() {
     const list = issuesInBinder();
     const P = [{ kind: 'cover' }, { kind: 'contents', list }];
@@ -558,14 +589,14 @@ const Binder = (() => {
       el.innerHTML = `<div class="bk-info"><small>Issue ${p.issue.n}</small><h3>${esc(p.issue.title)}</h3><p>${esc(p.issue.summary || '')}</p><a href="#issue-${esc(p.issue.id)}">Open this issue</a></div>`;
     } else {
       const img = document.createElement('img'); img.alt = `Issue ${p.issue.n}, page ${p.k + 1}`; img.draggable = false;
-      (p.issue.custom ? customPageImg(p.src) : fileImg(p.src)).then(u => { img.src = u; }).catch(() => {});
+      (p.issue.fsPages ? customPageImg(p.src) : fileImg(p.src)).then(u => { img.src = u; }).catch(() => {});
       el.appendChild(img);
       if (status(p.issue) !== 'live') { const r = document.createElement('span'); r.className = 'bk-lock'; r.textContent = 'Locked – only you can see this'; el.appendChild(r); }
     }
     el.dataset.n = idx + 1;
     return el;
   }
-  function preload(i) { for (let k = i - 2; k <= i + 4; k++) { const p = pages[k]; if (p && p.kind === 'img') (p.issue.custom ? customPageImg(p.src) : fileImg(p.src)).catch(() => {}); } }
+  function preload(i) { for (let k = i - 2; k <= i + 4; k++) { const p = pages[k]; if (p && p.kind === 'img') (p.issue.fsPages ? customPageImg(p.src) : fileImg(p.src)).catch(() => {}); } }
   // spread s: left = pages[2s-1], right = pages[2s]
   const maxSpread = () => single ? pages.length - 1 : Math.ceil((pages.length - 1) / 2);
   const leftIdx = s => 2 * s - 1, rightIdx = s => 2 * s;
