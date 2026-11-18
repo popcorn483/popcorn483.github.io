@@ -558,7 +558,8 @@ const Binder = (() => {
   const issuesInBinder = () => allIssues().filter(i => status(i) === 'live' || (canManage() && status(i) !== 'removed'));
   function buildPages() {
     const list = issuesInBinder();
-    const P = [{ kind: 'cover' }, { kind: 'contents', list }];
+    const PER = 30, P = [{ kind: 'cover' }];   // contents spread over as many pages as needed (30 entries each)
+    for (let k = 0; k < Math.max(1, list.length); k += PER) P.push({ kind: 'contents', list: list.slice(k, k + PER), cont: k > 0 });
     list.forEach(i => {
       const srcs = i.imgs || i.pageDocs || [];
       if (!srcs.length) P.push({ kind: 'info', issue: i }); // template issues without page images
@@ -580,7 +581,7 @@ const Binder = (() => {
       el.innerHTML = `<div class="bk-cv"><img src="${window.ERGS_CREST || ''}" alt=""><p class="bk-sch">Enniskillen Royal Grammar School</p><h1>AI in School</h1><h2>A Teacher’s Guide</h2><div class="bk-rule"></div><p>Whole-School AI Skills CPD Portfolio</p><p class="bk-small">${issuesInBinder().length} issues · for staff use</p></div>`;
     } else if (p.kind === 'contents') {
       el.classList.add('contents');
-      el.innerHTML = `<h3>Contents</h3><ol>${p.list.map(i => `<li data-go="${i._page - 1}"><b>${i.n}</b><span>${esc(i.title)}${status(i) !== 'live' ? ' <em>locked</em>' : ''}</span><i>${i._page}</i></li>`).join('')}</ol>`;
+      el.innerHTML = `<h3>Contents${p.cont ? ' <small>continued</small>' : ''}</h3><ol>${p.list.map(i => `<li data-go="${i._page - 1}"${status(i) !== 'live' ? ' class="lk" title="Locked – only you can see this"' : ''}><b>${i.n}</b><span>${esc(i.title)}</span><i>${i._page}</i></li>`).join('')}</ol>`;
       el.querySelectorAll('[data-go]').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); go(+li.dataset.go); }));
     } else if (p.kind === 'back') {
       el.classList.add('cover', 'back');
