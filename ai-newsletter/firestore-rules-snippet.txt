@@ -1,0 +1,17 @@
+    // ---- AI in School newsletter (popcorn483.github.io/ai-newsletter/) ----
+    // Content is encrypted with the staff password, so anyone may read; only the editor may write.
+    function nlEditor() { return request.auth != null && request.auth.token.email is string && request.auth.token.email_verified == true && request.auth.token.email.lower() in ['jbutler803@c2ken.net', 'jbutler803@c2kni.net']; }
+    match /newsletter/{doc} {
+      allow read: if true;
+      allow write: if nlEditor() && request.resource.data.releases is map;
+    }
+    match /newsletterIssues/{id} {
+      allow read: if true;
+      allow write: if nlEditor() && request.resource.data.enc is string && request.resource.data.enc.size() < 400000;
+      allow delete: if nlEditor();
+    }
+    match /newsletterImgs/{id} {
+      allow read: if true;
+      allow write: if nlEditor() && request.resource.data.data is string && request.resource.data.data.size() < 1000000;
+      allow delete: if nlEditor();
+    }

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI in School: A Teacher's Guide · ERGS</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="gate" class="gate" hidden>
+  <form class="gate-card" id="gateForm" autocomplete="off">
+    <img class="crest" id="gateCrest" alt="">
+    <p class="eyebrow">Enniskillen Royal Grammar School</p>
+    <h1>AI in School<span>A Teacher's Guide</span></h1>
+    <p class="muted">Whole-School AI Skills CPD Portfolio. Enter the staff password to open the newsletter library.</p>
+    <label class="sr" for="pw">Staff password</label>
+    <input id="pw" type="password" placeholder="Staff password" autocomplete="current-password" required>
+    <label class="check"><input type="checkbox" id="remember" checked> Remember me on this device</label>
+    <button class="btn primary wide" type="submit">Open the library</button>
+    <p class="err" id="gateErr" role="alert"></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header class="mast">
+    <div class="mast-in">
+      <a href="#" class="brand"><img class="crest" id="mastCrest" alt=""><span><b>AI in School</b><small>A Teacher's Guide · ERGS</small></span></a>
+      <nav class="mast-nav">
+        <a href="#" data-nav="library">Library</a>
+        <a href="#admin" data-nav="admin" id="adminLink">Release desk</a>
+        <button class="linkbtn" id="lockBtn" title="Forget the password on this device">Lock</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="library" class="view">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow light">Whole-School AI Skills CPD Portfolio</p>
+        <h1>Practical AI for busy teachers</h1>
+        <p>A new issue is released every few weeks: one skill, one prompt to try, and one challenge for your department.</p>
+        <div class="stats" id="stats"></div>
+      </div>
+      <a class="latest" id="latest" href="#"></a>
+    </section>
+
+    <section class="toolbar" aria-label="Filter issues">
+      <input type="search" id="q" placeholder="Search issues, e.g. quizzes, Copilot, feedback">
+      <div class="chips" id="themeChips"></div>
+      <select id="toolSel" aria-label="Filter by tool"><option value="">All tools</option><option>Gemini</option><option>Copilot</option><option>NotebookLM</option></select>
+    </section>
+    <div id="adminBar" class="adminbar" hidden></div>
+    <section class="grid" id="grid"></section>
+    <p class="empty" id="empty" hidden>No issues match that search.</p>
+  </main>
+
+  <main id="reader" class="view" hidden>
+    <div class="readbar">
+      <a href="#" class="btn ghost">← Library</a>
+      <span class="spacer"></span>
+      <button class="btn ghost" id="prevBtn">‹ Previous</button>
+      <button class="btn ghost" id="nextBtn">Next ›</button>
+      <button class="btn primary" id="printBtn">Print / Save PDF</button>
+    </div>
+    <div id="lockNote" class="locknote" hidden></div>
+    <article id="sheet" class="sheet-wrap"></article>
+  </main>
+
+  <main id="admin" class="view" hidden>
+    <div class="admin-wrap" id="adminWrap"></div>
+  </main>
+
+  <footer class="foot">ERGS · AI in School: A Teacher's Guide · For staff use only. Never enter pupil names or personal data into AI tools.</footer>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="crest.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

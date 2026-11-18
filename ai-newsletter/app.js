@@ -1,0 +1,463 @@
+// AI in School: A Teacher's Guide — newsletter library
+// Content is encrypted with the staff password; release state lives in Firestore (ergs-live project).
+// Firebase loads on demand, so the library still opens if Firebase is unreachable (releases then fall back to defaults).
+let initializeApp, getFirestore, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp, getAuth, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut;
+async function loadFirebase() {
+  const V = 'https://www.gstatic.com/firebasejs/10.12.2/';
+  const [a, f, u] = await Promise.all([import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js'), import(V + 'firebase-auth.js')]);
+  ({ initializeApp } = a); ({ getFirestore, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp } = f);
+  ({ getAuth, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut } = u);
+}
+
+const C = window.NL_CONFIG;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const START_HREF = location.href;
+const LS = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+const SS = { get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }, del(k) { try { sessionStorage.removeItem(k); } catch (e) {} } };
+const THEMES = ['Getting Started', 'Planning', 'Assessment & Feedback', 'Inclusion', 'Admin & Communication', 'Leadership & Data', 'Tools & Platforms', 'Pupil AI Literacy'];
+const today = () => new Date().toISOString().slice(0, 10);
+
+/* ---------- crypto ---------- */
+const b64e = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+let KEY = null;
+async function deriveKey(pw) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64d(C.salt), iterations: C.iterations, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+}
+const importRaw = raw => crypto.subtle.importKey('raw', b64d(raw), { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+async function dec(u8) { return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: u8.subarray(0, 12) }, KEY, u8.subarray(12))); }
+async function enc(u8) { const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, KEY, u8)); const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return out; }
+const encJSON = async o => b64e(await enc(new TextEncoder().encode(JSON.stringify(o))));
+const decJSON = async s => JSON.parse(new TextDecoder().decode(await dec(b64d(s))));
+const imgCache = new Map();
+function fileImg(path) {
+  if (!imgCache.has(path)) imgCache.set(path, fetch(path).then(r => r.arrayBuffer()).then(b => dec(new Uint8Array(b))).then(u => URL.createObjectURL(new Blob([u], { type: 'image/jpeg' }))));
+  return imgCache.get(path);
+}
+
+/* ---------- state ---------- */
+let CONTENT = null, RELEASES = {}, CUSTOM = [], ADMIN = false, AUTHUSER = null, STAFFVIEW = false, DB = null, AUTH = null;
+let filt = { q: '', theme: '', tool: '' };
+
+function allIssues() {
+  const o = CONTENT.orig.map(x => ({ ...x, id: 'w' + x.n, kind: 'img', imgs: ['img/w' + String(x.n).padStart(2, '0') + '.bin'], thumb: 'img/w' + String(x.n).padStart(2, '0') + '-t.bin', def: 'live' }));
+  const b = CONTENT.bank.map(x => ({ ...x, id: 'b' + x.n, kind: 'tpl', summary: x.aim, def: 'locked' }));
+  const c = CUSTOM.map(x => ({ ...x, custom: true, def: 'locked' }));
+  return [...o, ...b, ...c].sort((a, z) => a.n - z.n || String(a.id).localeCompare(z.id));
+}
+function status(i) {
+  const r = RELEASES[i.id];
+  if (!r || !r.s) return i.def;
+  if (r.s === 'sched') return r.d && r.d <= today() ? 'live' : 'sched';
+  return r.s;
+}
+const canManage = () => ADMIN && !STAFFVIEW;
+
+/* ---------- gate ---------- */
+async function tryKey() {
+  try {
+    const r = await fetch('content.enc', { cache: 'no-cache' });
+    CONTENT = JSON.parse(new TextDecoder().decode(await dec(new Uint8Array(await r.arrayBuffer()))));
+    return true;
+  } catch (e) { return false; }
+}
+async function boot() {
+  $('#gateCrest').src = $('#mastCrest').src = window.ERGS_CREST || '';
+  const raw = LS.get('ergsNL.k') || SS.get('ergsNL.k');
+  if (raw) { try { KEY = await importRaw(raw); if (await tryKey()) return start(); } catch (e) {} }
+  $('#gate').hidden = false; $('#pw').focus();
+}
+$('#gateForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector('button'); btn.disabled = true; $('#gateErr').textContent = '';
+  try {
+    KEY = await deriveKey($('#pw').value.trim());
+    if (!(await tryKey())) throw 0;
+    const raw = b64e(new Uint8Array(await crypto.subtle.exportKey('raw', KEY)));
+    ($('#remember').checked ? LS : SS).set('ergsNL.k', raw);
+    $('#gate').hidden = true; start();
+  } catch (err) { $('#gateErr').textContent = 'That password isn’t right. Please try again.'; }
+  btn.disabled = false;
+});
+$('#lockBtn').addEventListener('click', () => { LS.del('ergsNL.k'); SS.del('ergsNL.k'); location.hash = ''; location.reload(); });
+
+/* ---------- firebase ---------- */
+async function startFirebase() {
+  try {
+    await loadFirebase();
+    const app = initializeApp(C.firebase); DB = getFirestore(app); AUTH = getAuth(app);
+  } catch (e) { console.warn(e); return; }
+  onSnapshot(doc(DB, 'newsletter', 'state'), s => { RELEASES = (s.exists() && s.data().releases) || {}; render(); }, e => console.warn('state', e));
+  onSnapshot(collection(DB, 'newsletterIssues'), async s => {
+    const out = [];
+    for (const d of s.docs) { try { const x = await decJSON(d.data().enc); out.push({ ...x, id: 'c' + d.id, docId: d.id }); } catch (e) {} }
+    CUSTOM = out; render();
+  }, e => console.warn('issues', e));
+  onAuthStateChanged(AUTH, u => {
+    AUTHUSER = u;
+    ADMIN = !!(u && u.email && C.admins.includes(u.email.toLowerCase()));
+    render();
+  });
+  completeLink();
+}
+let LINK_MSG = '';
+async function completeLink(emailTyped) {
+  if (!isSignInWithEmailLink(AUTH, START_HREF)) return;
+  const email = emailTyped || LS.get('ergsNL.linkEmail');
+  if (!email) { LINK_MSG = 'confirm'; location.hash = 'admin'; render(); return; }
+  try {
+    await signInWithEmailLink(AUTH, email.toLowerCase(), START_HREF);
+    LS.del('ergsNL.linkEmail'); LINK_MSG = '';
+    history.replaceState(null, '', location.pathname + '#admin'); toast('Signed in – release desk unlocked');
+  } catch (e) { LINK_MSG = /expired|invalid-action/.test(String(e.code)) ? 'expired' : 'failed'; }
+  render();
+}
+
+/* ---------- rendering ---------- */
+function start() {
+  $('#app').hidden = false;
+  buildChips();
+  startFirebase();
+  window.addEventListener('hashchange', route);
+  route();
+}
+function route() { render(); window.scrollTo(0, 0); }
+function render() {
+  if (!CONTENT) return;
+  const h = location.hash.slice(1);
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', (h === 'admin') === (a.dataset.nav === 'admin')));
+  $('#adminLink').textContent = ADMIN ? 'Release desk' : 'Staff admin';
+  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = true;
+  if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
+  else if (h.startsWith('issue-')) { $('#reader').hidden = false; renderReader(h.slice(6)); }
+  else { $('#library').hidden = false; renderLibrary(); }
+}
+function buildChips() {
+  const el = $('#themeChips');
+  el.innerHTML = ['All', ...THEMES].map(t => `<button class="chip${t === 'All' ? ' on' : ''}" data-t="${esc(t === 'All' ? '' : t)}">${esc(t)}</button>`).join('');
+  el.addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; filt.theme = b.dataset.t; el.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b)); renderLibrary(); });
+  $('#q').addEventListener('input', e => { filt.q = e.target.value.toLowerCase(); renderLibrary(); });
+  $('#toolSel').addEventListener('change', e => { filt.tool = e.target.value; renderLibrary(); });
+}
+function miniCover(i) {
+  return `<div class="mini"><div class="mh"><small>AI in School</small><b>${esc(i.title)}</b><i>${i.n}</i></div><div class="kick">${esc(i.kicker || i.theme || '')}</div><div class="mb"><div><span style="height:34px"></span><span class="y" style="height:16px"></span><span style="height:12px"></span></div><div><span class="g" style="height:26px"></span><span style="height:22px"></span></div></div></div>`;
+}
+function coverHTML(i) {
+  if (i.thumb && i.thumb.startsWith('data:')) return `<img alt="" src="${esc(i.thumb)}">`;
+  if (i.thumb) return `<img alt="" data-src="${esc(i.thumb)}">`;
+  return miniCover(i);
+}
+function hydrateImgs(root) {
+  root.querySelectorAll('img[data-src]').forEach(img => fileImg(img.dataset.src).then(u => { img.src = u; img.removeAttribute('data-src'); }).catch(() => {}));
+}
+function matches(i) {
+  if (filt.theme && i.theme !== filt.theme) return false;
+  if (filt.tool && !(i.tools || []).includes(filt.tool)) return false;
+  if (filt.q) { const hay = [i.title, i.summary, i.theme, i.kicker, (i.tools || []).join(' '), 'issue ' + i.n].join(' ').toLowerCase(); if (!hay.includes(filt.q)) return false; }
+  return true;
+}
+function cardHTML(i) {
+  const st = status(i), locked = st !== 'live', mg = canManage();
+  const sched = RELEASES[i.id]?.d;
+  const badge = st === 'live' ? (i === latestIssue() ? '<span class="badge">Latest</span>' : '') :
+    st === 'sched' ? `<span class="badge sched">Out ${esc(fmtDate(sched))}</span>` : '<span class="badge locked">Coming soon</span>';
+  const quick = mg ? `<button class="btn small quick" data-quick="${esc(i.id)}">${locked ? 'Release' : 'Lock'}</button>` : '';
+  const tools = (i.tools || []).map(t => `<span class="tool ${esc(t)}">${esc(t)}</span>`).join('');
+  const inner = `${badge}<div class="cover">${locked && !mg ? miniCover({ ...i, title: 'Coming soon', kicker: i.theme }) : coverHTML(i)}</div>
+    <div class="meta"><span class="num">Issue ${i.n} · ${esc(i.theme || '')}</span><h3>${esc(i.title)}</h3>${locked && !mg ? '<p>Not released yet – watch this space.</p>' : `<p>${esc(i.summary || '')}</p>`}<div class="tools">${tools}</div></div>`;
+  if (locked && !mg) return `<div class="card locked staff">${inner}</div>`;
+  return `<a class="card${locked ? ' locked' : ''}" href="#issue-${esc(i.id)}">${inner}${quick}</a>`;
+}
+function latestIssue() { const live = allIssues().filter(i => status(i) === 'live'); return live[live.length - 1]; }
+function fmtDate(d) { if (!d) return ''; const x = new Date(d + 'T12:00:00'); return x.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); }
+
+function renderLibrary() {
+  const all = allIssues(), live = all.filter(i => status(i) === 'live'), soon = all.filter(i => status(i) !== 'live');
+  $('#stats').innerHTML = `<div class="stat"><b>${live.length}</b><span>issues released</span></div><div class="stat"><b>${soon.length}</b><span>coming soon</span></div><div class="stat"><b>${new Set(live.map(i => i.theme)).size}</b><span>themes covered</span></div>`;
+  const L = latestIssue();
+  $('#latest').hidden = !L;
+  if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">New this week · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
+  const ab = $('#adminBar');
+  ab.hidden = !ADMIN;
+  if (ADMIN) {
+    const next = soon[0];
+    ab.innerHTML = STAFFVIEW ? `<b>Staff preview</b><span>You’re seeing exactly what staff see.</span><span class="spacer"></span><button class="btn small" id="svOff">Back to editor view</button>`
+      : `<b>Editor view</b><span>Locked issues are shown greyed out – only you can open them.</span><span class="spacer"></span>${next ? `<button class="btn small primary" id="relNext">Release next: Issue ${next.n}</button>` : ''}<button class="btn small" id="svOn">Preview as staff</button><a class="btn small" href="#admin">Release desk</a>`;
+    $('#svOff')?.addEventListener('click', () => { STAFFVIEW = false; render(); });
+    $('#svOn')?.addEventListener('click', () => { STAFFVIEW = true; render(); });
+    $('#relNext')?.addEventListener('click', () => setRelease(next.id, { s: 'live' }, `Issue ${next.n} released`));
+  }
+  const liveShown = live.filter(matches).reverse(), soonShown = soon.filter(matches);
+  const g = $('#grid');
+  g.innerHTML = liveShown.map(cardHTML).join('') + (soonShown.length ? `<h2 style="grid-column:1/-1;font:800 20px var(--head);color:var(--navy);margin:16px 0 0">Coming soon</h2>` + soonShown.map(cardHTML).join('') : '');
+  $('#empty').hidden = liveShown.length + soonShown.length > 0;
+  hydrateImgs(g);
+  g.querySelectorAll('[data-quick]').forEach(b => b.addEventListener('click', e => {
+    e.preventDefault(); e.stopPropagation();
+    const i = all.find(x => x.id === b.dataset.quick); const lk = status(i) !== 'live';
+    setRelease(i.id, { s: lk ? 'live' : 'locked' }, lk ? `Issue ${i.n} released` : `Issue ${i.n} locked`);
+  }));
+}
+
+function list(a) { return (a || []).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join(''); }
+function tplHTML(i) {
+  const paras = (Array.isArray(i.intro) ? i.intro : String(i.intro || '').split(/\n\s*\n/)).filter(Boolean).map(p => `<p>${esc(p)}</p>`).join('');
+  const meta = [i.kicker, i.difficulty && 'Difficulty: ' + i.difficulty, i.read && 'Est. read time: ' + i.read, (i.tools || []).length && 'Tools: ' + i.tools.join(', ')].filter(Boolean).map(esc).join('<span class="sep">|</span>');
+  return `<div class="sheet">
+  <header class="nl-head"><h1>AI in School: A Teacher’s Guide</h1><p>Whole-School AI Skills CPD Portfolio | ${esc(i.title)}</p><span class="nl-issue">Issue ${i.n}</span></header>
+  ${meta ? `<div class="nl-meta">${meta}</div>` : ''}
+  <div class="nl-body">
+    ${i.aim ? `<p class="nl-aim">${esc(i.aim)}</p>` : ''}
+    <h2 class="nl-sec">${esc(i.title)}</h2>
+    <div class="nl-cols">
+      <div>
+        <div class="box"><h4>How AI can help</h4>${paras}
+          ${i.prompt ? `<div class="prompt"><h5>Try this prompt</h5><q>${esc(i.prompt)}</q><button class="btn small copy" data-copy>Copy</button></div>` : ''}
+        </div>
+        ${i.challenge ? `<p class="hand">Want to give it a go this week?</p><div class="challenge"><h4>Department challenge</h4><p>${esc(i.challenge)}</p></div>` : ''}
+      </div>
+      <aside>
+        ${i.saved ? `<div class="saved"><h4>Estimated time saved</h4><b>${esc(i.saved)}</b><span>${esc(i.savedPer || '')}</span></div>` : ''}
+        ${i.tip ? `<div class="box tip"><h4>Pro tip</h4><p>${esc(i.tip)}</p></div>` : ''}
+        ${(i.ideas || []).length ? `<div class="box ideas"><h4>${esc(i.ideasTitle || 'Ideas to try')}</h4><ul>${list(i.ideas)}</ul></div>` : ''}
+      </aside>
+    </div>
+    ${i.bad?.p || i.good?.p ? `<div class="vs">
+      <div class="box bad"><h4>✗ Bad prompt</h4><p><i>“${esc(i.bad?.p)}”</i></p>${i.bad?.r ? `<div class="r"><b>Result:</b> ${esc(i.bad.r)}</div>` : ''}</div>
+      <div class="box good"><h4>✓ Good prompt</h4><p><i>“${esc(i.good?.p)}”</i></p>${i.good?.r ? `<div class="r"><b>Result:</b> ${esc(i.good.r)}</div>` : ''}</div>
+    </div>` : ''}
+    ${(i.dos || []).length || (i.donts || []).length ? `<div class="dd"><div class="box do"><h4>Do</h4><ul>${list(i.dos)}</ul></div><div class="box dont"><h4>Don’t</h4><ul>${list(i.donts)}</ul></div></div>` : ''}
+    ${i.link ? `<p><a class="extlink" href="${esc(i.link)}" target="_blank" rel="noopener">Open the linked resource ↗</a></p>` : ''}
+  </div>
+  ${i.key ? `<footer class="nl-key"><h4>Key message</h4><p>${esc(i.key)}</p></footer>` : ''}
+</div>`;
+}
+async function customPageImg(docId) {
+  const k = 'fs:' + docId;
+  if (!imgCache.has(k)) imgCache.set(k, getDoc(doc(DB, 'newsletterImgs', docId)).then(async s => URL.createObjectURL(new Blob([await dec(b64d(s.data().data))], { type: 'image/jpeg' }))));
+  return imgCache.get(k);
+}
+function renderReader(id) {
+  const all = allIssues(), i = all.find(x => x.id === id);
+  const sheet = $('#sheet');
+  if (!i) { sheet.innerHTML = '<p class="empty">Issue not found – it may still be loading.</p>'; return; }
+  const st = status(i);
+  if (st !== 'live' && !canManage()) { sheet.innerHTML = '<div class="info"><h1>Coming soon</h1><p>This issue hasn’t been released yet.</p><a class="btn" href="#">Back to the library</a></div>'; $('#lockNote').hidden = true; return; }
+  $('#lockNote').hidden = st === 'live';
+  $('#lockNote').textContent = st === 'sched' ? `Preview – scheduled for release on ${fmtDate(RELEASES[i.id].d)}. Staff can’t see this yet.` : 'Preview – this issue is locked. Staff can’t see it yet.';
+  const visible = all.filter(x => status(x) === 'live' || canManage());
+  const idx = visible.indexOf(i);
+  $('#prevBtn').disabled = idx <= 0; $('#nextBtn').disabled = idx >= visible.length - 1;
+  $('#prevBtn').onclick = () => { location.hash = 'issue-' + visible[idx - 1].id; };
+  $('#nextBtn').onclick = () => { location.hash = 'issue-' + visible[idx + 1].id; };
+  $('#printBtn').onclick = () => window.print();
+  document.title = `Issue ${i.n}: ${i.title} · AI in School`;
+  if (i.kind === 'tpl') sheet.innerHTML = tplHTML(i);
+  else {
+    const pages = i.imgs || (i.pageDocs || []);
+    sheet.innerHTML = `<div class="info"><span class="num eyebrow">Issue ${i.n} · ${esc(i.theme || '')}</span><h1>${esc(i.title)}</h1><p class="muted" style="margin:0">${esc(i.summary || '')}</p>${i.link ? `<a class="extlink" href="${esc(i.link)}" target="_blank" rel="noopener">Open the linked resource ↗</a>` : ''}</div>` +
+      pages.map((p, n) => `<img class="page-img" alt="Issue ${i.n} page ${n + 1}" data-p="${n}">`).join('');
+    sheet.querySelectorAll('img[data-p]').forEach(img => {
+      const p = pages[+img.dataset.p];
+      (i.custom ? customPageImg(p) : fileImg(p)).then(u => { img.src = u; }).catch(() => { img.alt = 'Page could not be loaded'; });
+    });
+  }
+  sheet.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(b.parentElement.querySelector('q').textContent); toast('Prompt copied'); } catch (e) { toast('Select the prompt text to copy it'); }
+  }));
+}
+
+/* ---------- writes ---------- */
+let writing = Promise.resolve();
+function setRelease(id, val, msg) {
+  if (!ADMIN) return;
+  RELEASES = { ...RELEASES, [id]: val }; render();
+  writing = writing.then(() => setDoc(doc(DB, 'newsletter', 'state'), { releases: { [id]: val }, updated: serverTimestamp() }, { merge: true }))
+    .then(() => msg && toast(msg)).catch(e => { console.warn(e); toast('Couldn’t save – check you’re signed in'); });
+}
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 2600); }
+
+/* ---------- admin ---------- */
+let editing = null, formKind = 'tpl', pendingPages = null, pendingThumb = null;
+function renderAdmin() {
+  const w = $('#adminWrap');
+  if (!AUTH) { w.innerHTML = '<div class="panel"><h2>Release desk</h2><p>Connecting…</p></div>'; return; }
+  if (!ADMIN) {
+    const signedOther = AUTHUSER && !ADMIN;
+    w.innerHTML = `<div class="panel"><h2>Release desk</h2>
+      <p class="muted">Only the newsletter editor can release and add issues. Enter your school email and we’ll send you a sign-in link – open it on this device.</p>
+      ${LINK_MSG === 'confirm' ? '<p class="note">Confirm your email address to finish signing in.</p>' : LINK_MSG === 'expired' ? '<p class="note">That link has expired or was already used. Send a new one.</p>' : LINK_MSG === 'failed' ? '<p class="note">Sign-in didn’t finish. Check the address and try again.</p>' : ''}
+      ${signedOther ? `<p class="note">You’re signed in as ${esc(AUTHUSER.email || 'another account')}, which isn’t the editor account. <button class="btn small" id="so">Sign out</button></p>` : ''}
+      <div class="row"><div class="field"><label for="ae">School email</label><input id="ae" type="email" value="${esc(LS.get('ergsNL.linkEmail') || C.admins[0])}"></div>
+      <button class="btn primary" id="sendLink">${LINK_MSG === 'confirm' ? 'Finish signing in' : 'Email me a sign-in link'}</button></div><p id="am" class="muted"></p></div>`;
+    $('#so')?.addEventListener('click', () => signOut(AUTH));
+    $('#sendLink').addEventListener('click', async () => {
+      const e = $('#ae').value.trim().toLowerCase();
+      if (LINK_MSG === 'confirm') return completeLink(e);
+      try {
+        await sendSignInLinkToEmail(AUTH, e, { url: location.origin + location.pathname + '#admin', handleCodeInApp: true });
+        LS.set('ergsNL.linkEmail', e);
+        $('#am').textContent = 'Link sent – check your inbox (and junk folder), then open the link on this device.';
+      } catch (err) { $('#am').textContent = 'Couldn’t send the link: ' + (err.code || err.message); }
+    });
+    return;
+  }
+  const all = allIssues();
+  const rows = all.map(i => {
+    const r = RELEASES[i.id] || {}, st = status(i), sel = r.s || i.def;
+    return `<tr class="${st}"><td><b>${i.n}</b></td><td><a href="#issue-${esc(i.id)}">${esc(i.title)}</a><br><small class="muted">${esc(i.theme || '')}${i.custom ? ' · added by you' : i.kind === 'tpl' ? ' · issue bank' : ' · original PDF'}</small></td>
+      <td><select data-s="${esc(i.id)}"><option value="live"${sel === 'live' ? ' selected' : ''}>Released</option><option value="locked"${sel === 'locked' ? ' selected' : ''}>Locked</option><option value="sched"${sel === 'sched' ? ' selected' : ''}>Scheduled</option></select></td>
+      <td>${sel === 'sched' ? `<input type="date" data-d="${esc(i.id)}" value="${esc(r.d || '')}">` : ''}</td>
+      <td>${i.custom ? `<button class="btn small" data-edit="${esc(i.id)}">Edit</button> <button class="btn small danger" data-del="${esc(i.id)}">Delete</button>` : ''}</td></tr>`;
+  }).join('');
+  const nextN = Math.max(...all.map(i => i.n)) + 1;
+  const e = editing || {};
+  const val = (k, d = '') => esc(e[k] ?? d);
+  const lines = k => esc((e[k] || []).join('\n'));
+  w.innerHTML = `
+  <div class="panel"><div class="row"><h2 style="margin:0">Release desk</h2><span class="spacer"></span><small class="muted">Signed in as ${esc(AUTHUSER.email)}</small><button class="btn small" id="so">Sign out</button></div>
+    <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only see titles and “Coming soon” for anything else.</p>
+    <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Add a new issue</button></div>
+  </div>
+  <div class="panel" id="formPanel"${editing || formKind === 'open' ? '' : ' hidden'}>
+    <h2>${editing && editing.docId ? 'Edit issue' : 'Add a new issue'}</h2>
+    <p class="muted">Upload a finished PDF (or image), or type it into the house template and it’s designed for you.</p>
+    <div class="seg" id="kindSeg"><button data-k="img" class="${(e.kind || 'img') === 'img' ? 'on' : ''}">Upload PDF / image</button><button data-k="tpl" class="${e.kind === 'tpl' ? 'on' : ''}">Use the template</button></div>
+    <form id="issueForm" style="margin-top:14px">
+      <div class="row">
+        <div class="field" style="flex:0 1 110px"><label>Issue no.</label><input name="n" type="number" min="1" required value="${val('n', nextN)}"></div>
+        <div class="field" style="flex:3 1 300px"><label>Title</label><input name="title" required value="${val('title')}"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Theme</label><select name="theme">${THEMES.map(t => `<option${e.theme === t ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+        <div class="field"><label>Tools</label><div class="row">${['Gemini', 'Copilot', 'NotebookLM'].map(t => `<label class="check" style="margin:0"><input type="checkbox" name="tools" value="${t}"${(e.tools || []).includes(t) ? ' checked' : ''}> ${t}</label>`).join('')}</div></div>
+        <div class="field"><label>When saved</label><select name="initial"><option value="locked">Keep locked</option><option value="live">Release now</option></select></div>
+      </div>
+      <div class="field"><label>One-line summary (shown on the card)</label><input name="summary" value="${val('summary')}"></div>
+      <div class="field"><label>Link (optional – e.g. a Drive or SharePoint copy)</label><input name="link" type="url" value="${val('link')}"></div>
+      <div id="imgFields">
+        <div class="field"><label>PDF or image file</label><input type="file" id="fileIn" accept="application/pdf,image/*"><small>${editing && editing.kind === 'img' ? 'Leave empty to keep the current pages. ' : ''}Each page is stored encrypted. Multi-page PDFs are fine.</small></div>
+        <div id="filePrev" class="row"></div>
+      </div>
+      <div id="tplFields">
+        <div class="row"><div class="field"><label>Role / kicker</label><input name="kicker" value="${val('kicker')}" placeholder="e.g. Retrieval Practice Engineer"></div>
+        <div class="field"><label>Difficulty</label><select name="difficulty">${['Beginner', 'Intermediate', 'Advanced'].map(d => `<option${e.difficulty === d ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
+        <div class="field"><label>Read time</label><input name="read" value="${val('read', '5 mins')}"></div></div>
+        <div class="row"><div class="field"><label>Time saved</label><input name="saved" value="${val('saved')}" placeholder="~20 mins"></div><div class="field"><label>…per</label><input name="savedPer" value="${val('savedPer')}" placeholder="per lesson"></div></div>
+        <div class="field"><label>This week’s skill (aim)</label><input name="aim" value="${val('aim')}"></div>
+        <div class="field"><label>How AI can help (blank line between paragraphs)</label><textarea name="intro" rows="5">${esc(Array.isArray(e.intro) ? e.intro.join('\n\n') : e.intro || '')}</textarea></div>
+        <div class="field"><label>Try this prompt</label><textarea name="prompt" rows="4">${val('prompt')}</textarea></div>
+        <div class="field"><label>Pro tip</label><textarea name="tip" rows="2">${val('tip')}</textarea></div>
+        <div class="row"><div class="field"><label>Ideas box title</label><input name="ideasTitle" value="${val('ideasTitle', 'Ideas to try')}"></div></div>
+        <div class="field"><label>Ideas (one per line)</label><textarea name="ideas" rows="4">${lines('ideas')}</textarea></div>
+        <div class="field"><label>Department challenge</label><textarea name="challenge" rows="2">${val('challenge')}</textarea></div>
+        <div class="row"><div class="field"><label>Bad prompt</label><textarea name="badp" rows="2">${esc(e.bad?.p || '')}</textarea></div><div class="field"><label>…result</label><textarea name="badr" rows="2">${esc(e.bad?.r || '')}</textarea></div></div>
+        <div class="row"><div class="field"><label>Good prompt</label><textarea name="goodp" rows="3">${esc(e.good?.p || '')}</textarea></div><div class="field"><label>…result</label><textarea name="goodr" rows="3">${esc(e.good?.r || '')}</textarea></div></div>
+        <div class="row"><div class="field"><label>Do (one per line)</label><textarea name="dos" rows="4">${lines('dos')}</textarea></div><div class="field"><label>Don’t (one per line)</label><textarea name="donts" rows="4">${lines('donts')}</textarea></div></div>
+        <div class="field"><label>Key message</label><input name="key" value="${val('key')}"></div>
+      </div>
+      <div class="row"><button class="btn primary" type="submit" id="saveBtn">Save issue</button><button class="btn" type="button" id="cancelBtn">Cancel</button><span id="saveMsg" class="muted"></span></div>
+    </form>
+  </div>
+  <div class="panel"><h2>All issues</h2><table class="rel"><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Release date</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  wireAdmin(all);
+}
+function wireAdmin(all) {
+  $('#so').addEventListener('click', () => signOut(AUTH));
+  $('#relNext2').addEventListener('click', () => { const n = all.find(i => status(i) !== 'live'); if (n) setRelease(n.id, { s: 'live' }, `Issue ${n.n} released`); else toast('Everything is already released'); });
+  $('#addBtn').addEventListener('click', () => { editing = { kind: 'img' }; formKind = 'img'; pendingPages = pendingThumb = null; renderAdmin(); $('#formPanel').scrollIntoView({ behavior: 'smooth' }); });
+  document.querySelectorAll('[data-s]').forEach(s => s.addEventListener('change', () => {
+    const id = s.dataset.s, v = s.value, cur = RELEASES[id] || {};
+    setRelease(id, v === 'sched' ? { s: 'sched', d: cur.d || today() } : { s: v }, v === 'live' ? 'Released' : v === 'locked' ? 'Locked' : 'Pick a release date');
+  }));
+  document.querySelectorAll('[data-d]').forEach(d => d.addEventListener('change', () => setRelease(d.dataset.d, { s: 'sched', d: d.value }, 'Scheduled for ' + fmtDate(d.value))));
+  document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => { editing = { ...CUSTOM.find(c => c.id === b.dataset.edit) }; formKind = editing.kind; pendingPages = pendingThumb = null; renderAdmin(); $('#formPanel').scrollIntoView({ behavior: 'smooth' }); }));
+  document.querySelectorAll('[data-del]').forEach(b => {
+    let armed = false;
+    b.addEventListener('click', async () => {
+      if (!armed) { armed = true; b.textContent = 'Click again to delete'; setTimeout(() => { armed = false; b.textContent = 'Delete'; }, 3000); return; }
+      const c = CUSTOM.find(x => x.id === b.dataset.del);
+      try { for (const p of c.pageDocs || []) await deleteDoc(doc(DB, 'newsletterImgs', p)); await deleteDoc(doc(DB, 'newsletterIssues', c.docId)); toast('Issue deleted'); } catch (e) { toast('Couldn’t delete: ' + (e.code || e.message)); }
+    });
+  });
+  const fp = $('#formPanel'); if (fp.hidden) return;
+  const setKind = k => { formKind = k; $('#imgFields').hidden = k !== 'img'; $('#tplFields').hidden = k !== 'tpl'; document.querySelectorAll('#kindSeg button').forEach(b => b.classList.toggle('on', b.dataset.k === k)); };
+  setKind(editing?.kind || 'img');
+  document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => setKind(b.dataset.k)));
+  $('#cancelBtn').addEventListener('click', () => { editing = null; formKind = 'tpl'; renderAdmin(); });
+  $('#fileIn').addEventListener('change', async ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    $('#saveMsg').textContent = 'Preparing pages…'; $('#saveBtn').disabled = true;
+    try { const r = await fileToPages(f); pendingPages = r.pages; pendingThumb = r.thumb; $('#filePrev').innerHTML = `<img src="${r.thumb}" style="width:120px;border:1px solid var(--line);border-radius:6px"><span class="muted">${r.pages.length} page${r.pages.length > 1 ? 's' : ''} ready</span>`; $('#saveMsg').textContent = ''; }
+    catch (e) { $('#saveMsg').textContent = 'Couldn’t read that file: ' + e.message; }
+    $('#saveBtn').disabled = false;
+  });
+  $('#issueForm').addEventListener('submit', saveIssue);
+}
+
+async function loadPdfJs() {
+  if (window.pdfjsLib) return window.pdfjsLib;
+  await new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  return window.pdfjsLib;
+}
+const canvasBlob = (c, q) => new Promise(r => c.toBlob(r, 'image/jpeg', q));
+async function fitJpeg(canvas) {
+  for (const q of [0.82, 0.74, 0.66, 0.58, 0.5]) { const b = await canvasBlob(canvas, q); if (b.size < 640000) return new Uint8Array(await b.arrayBuffer()); }
+  const s = document.createElement('canvas'); s.width = canvas.width * 0.75; s.height = canvas.height * 0.75; s.getContext('2d').drawImage(canvas, 0, 0, s.width, s.height); return fitJpeg(s);
+}
+async function fileToPages(f) {
+  const canvases = [];
+  if (f.type === 'application/pdf') {
+    const pdfjs = await loadPdfJs();
+    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    if (pdf.numPages > 12) throw new Error('please keep issues to 12 pages or fewer');
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p); const vp0 = page.getViewport({ scale: 1 }); const vp = page.getViewport({ scale: 1240 / vp0.width });
+      const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: ctx, viewport: vp }).promise; canvases.push(c);
+    }
+  } else if (f.type.startsWith('image/')) {
+    const img = await createImageBitmap(f); const sc = Math.min(1, 1240 / img.width);
+    const c = document.createElement('canvas'); c.width = img.width * sc; c.height = img.height * sc;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height); canvases.push(c);
+  } else throw new Error('choose a PDF or an image');
+  const pages = []; for (const c of canvases) pages.push(await fitJpeg(c));
+  const t = document.createElement('canvas'); t.width = 330; t.height = Math.round(canvases[0].height * 330 / canvases[0].width);
+  t.getContext('2d').drawImage(canvases[0], 0, 0, t.width, t.height);
+  return { pages, thumb: t.toDataURL('image/jpeg', 0.72) };
+}
+async function saveIssue(ev) {
+  ev.preventDefault();
+  const fd = new FormData(ev.target), g = k => (fd.get(k) || '').toString().trim(), ln = k => g(k).split('\n').map(s => s.trim()).filter(Boolean);
+  const msg = $('#saveMsg'), btn = $('#saveBtn');
+  const docId = editing?.docId || doc(collection(DB, 'newsletterIssues')).id;
+  const base = { n: +g('n'), title: g('title'), theme: g('theme'), tools: fd.getAll('tools'), summary: g('summary'), link: g('link'), kind: formKind };
+  let data;
+  if (formKind === 'img') {
+    if (!pendingPages && !(editing?.kind === 'img' && editing.pageDocs?.length)) { msg.textContent = 'Choose a PDF or image first.'; return; }
+    data = { ...base, pageDocs: editing?.pageDocs || [], thumb: editing?.thumb || '' };
+  } else {
+    data = { ...base, kicker: g('kicker'), difficulty: g('difficulty'), read: g('read'), saved: g('saved'), savedPer: g('savedPer'), aim: g('aim'), intro: g('intro'), prompt: g('prompt'), tip: g('tip'), ideasTitle: g('ideasTitle'), ideas: ln('ideas'), challenge: g('challenge'), bad: { p: g('badp'), r: g('badr') }, good: { p: g('goodp'), r: g('goodr') }, dos: ln('dos'), donts: ln('donts'), key: g('key') };
+    if (!data.summary) data.summary = data.aim;
+  }
+  btn.disabled = true; msg.textContent = 'Saving…';
+  try {
+    if (formKind === 'img' && pendingPages) {
+      const old = editing?.pageDocs || [], ids = [];
+      for (let p = 0; p < pendingPages.length; p++) { const pid = `${docId}_${p}`; msg.textContent = `Uploading page ${p + 1} of ${pendingPages.length}…`; await setDoc(doc(DB, 'newsletterImgs', pid), { data: b64e(await enc(pendingPages[p])) }); ids.push(pid); }
+      for (const o of old) if (!ids.includes(o)) await deleteDoc(doc(DB, 'newsletterImgs', o)).catch(() => {});
+      data.pageDocs = ids; data.thumb = pendingThumb; [...imgCache.keys()].filter(k => k.startsWith('fs:' + docId)).forEach(k => imgCache.delete(k));
+    }
+    delete data.id; delete data.docId; delete data.custom;
+    await setDoc(doc(DB, 'newsletterIssues', docId), { enc: await encJSON(data), updated: serverTimestamp() });
+    if (!editing?.docId) setRelease('c' + docId, { s: g('initial') === 'live' ? 'live' : 'locked' });
+    else if (g('initial') === 'live') setRelease('c' + docId, { s: 'live' });
+    toast(`Issue ${data.n} saved`); editing = null; pendingPages = pendingThumb = null; formKind = 'tpl'; renderAdmin();
+  } catch (e) { console.warn(e); msg.textContent = 'Couldn’t save: ' + (e.code || e.message); btn.disabled = false; }
+}
+// pageDocs → reader uses i.pageDocs for custom image issues
+boot();
