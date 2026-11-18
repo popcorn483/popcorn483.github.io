@@ -14,6 +14,9 @@ Open the link and enter the staff password once. Tick "Remember me" to stay unlo
    - **+ Add a new issue**: upload a finished PDF/image, or fill in the house template.
 4. In the library you also get **Release / Lock** buttons on every card, and **Preview as staff**.
 
+## Updates
+Push any change to this folder and it reaches everyone automatically. Open copies (including the installed phone/tablet app) check every few minutes and every time they're reopened; when the files have changed they refresh themselves. If you're midway through adding an issue, you get an "Update now" button instead.
+
 ## How it works
 - `content.enc` and `img/*.bin` hold the issues, encrypted with the staff password (AES-GCM, key from PBKDF2). The public repo never contains readable issue content.
 - Release state and added issues are stored in Firestore (ergs-live project): `newsletter/state`, `newsletterIssues`, `newsletterImgs`. Added issues are encrypted in the browser before saving.

@@ -483,4 +483,37 @@ $('#shareIssueBtn').addEventListener('click', () => {
   const id = location.hash.slice(7), i = allIssues().find(x => x.id === id); if (!i) return openShare([LIB_ITEM]);
   openShare([{ label: 'Issue ' + i.n, url: BASE + '#issue-' + i.id, file: 'ai-in-school-issue-' + i.n, desc: `Issue ${i.n}: ${i.title}. Opens straight onto this issue (staff password needed).`, shareText: `AI in School – Issue ${i.n}: ${i.title}` }, LIB_ITEM]);
 });
+/* ---------- automatic updates ----------
+   The app fingerprints its own files. When anything is pushed to GitHub, open and installed copies
+   notice within minutes (and whenever they're reopened) and refresh themselves – no version numbers to bump. */
+const WATCH = ['index.html', 'app.js', 'style.css', 'config.js', 'share.js', 'content.enc'];
+let BUILD = null, updating = false;
+async function fingerprint() {
+  const bufs = await Promise.all(WATCH.map(f => fetch(f + '?v=' + Date.now(), { cache: 'no-store' }).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); })));
+  const all = new Uint8Array(bufs.reduce((n, b) => n + b.byteLength, 0)); let o = 0; for (const b of bufs) { all.set(new Uint8Array(b), o); o += b.byteLength; }
+  return b64e(new Uint8Array(await crypto.subtle.digest('SHA-256', all)));
+}
+async function checkUpdate() {
+  if (updating || !navigator.onLine) return;
+  try {
+    const fp = await fingerprint();
+    if (!BUILD) { BUILD = fp; return; }
+    if (fp === BUILD) return;
+    updating = true;
+    const busy = location.hash === '#admin' && !$('#formPanel')?.hidden;   // don't throw away a half-typed issue
+    if (document.hidden || !busy) { await refreshApp(); return; }
+    const bar = document.createElement('div'); bar.className = 'updbar';
+    bar.innerHTML = '<span>A new version of AI in School is ready.</span><button class="btn small primary">Update now</button>';
+    bar.querySelector('button').onclick = refreshApp; document.body.appendChild(bar);
+  } catch (e) {}
+}
+async function refreshApp() {
+  try { const r = await navigator.serviceWorker?.getRegistration(); await r?.update(); const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch (e) {}
+  sessionStorage.setItem('ergsNL.updated', '1'); location.reload();
+}
+checkUpdate();
+setInterval(checkUpdate, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
+window.addEventListener('online', checkUpdate);
+if (SS.get('ergsNL.updated')) { SS.del('ergsNL.updated'); setTimeout(() => toast('Updated to the latest version'), 800); }
 boot();
