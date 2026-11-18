@@ -577,15 +577,24 @@ const Binder = (() => {
     const p = pages[idx];
     if (!p) { el.classList.add('blank'); return el; }
     if (p.kind === 'cover') {
-      el.classList.add('cover');
-      el.innerHTML = `<div class="bk-cv"><img src="${window.ERGS_CREST || ''}" alt=""><p class="bk-sch">Enniskillen Royal Grammar School</p><h1>AI in School</h1><h2>A Teacher’s Guide</h2><div class="bk-rule"></div><p>Whole-School AI Skills CPD Portfolio</p><p class="bk-small">${issuesInBinder().length} issues · for staff use</p></div>`;
+      const d = new Date(), y = d.getMonth() >= 7 ? d.getFullYear() : d.getFullYear() - 1, n = issuesInBinder().length;
+      el.classList.add('cv-front');
+      el.innerHTML = `<div class="cvf-spine"></div>
+        <div class="cvf-top"><img src="${window.ERGS_CREST || ''}" alt=""><div><b>Enniskillen Royal Grammar School</b><span>Staff Professional Learning</span></div></div>
+        <div class="cvf-title"><p class="cvf-eyebrow">Whole-School AI Skills CPD Portfolio</p><h1>AI in School</h1><h2>A Teacher’s Guide</h2><div class="cvf-rule"></div>
+          <p class="cvf-lede">Practical, classroom-focused guidance on using Microsoft Copilot, Google Gemini and NotebookLM to support teaching and learning.</p></div>
+        <div class="cvf-foot"><div><small>Collected edition</small><b>${n} issues</b></div><div><small>Academic year</small><b>${y}–${String(y + 1).slice(2)}</b></div><div><small>Audience</small><b>All teaching staff</b></div></div>`;
     } else if (p.kind === 'contents') {
       el.classList.add('contents');
       el.innerHTML = `<h3>Contents${p.cont ? ' <small>continued</small>' : ''}</h3><ol>${p.list.map(i => `<li data-go="${i._page - 1}"${status(i) !== 'live' ? ' class="lk" title="Locked – only you can see this"' : ''}><b>${i.n}</b><span>${esc(i.title)}</span><i>${i._page}</i></li>`).join('')}</ol>`;
       el.querySelectorAll('[data-go]').forEach(li => li.addEventListener('click', e => { e.stopPropagation(); go(+li.dataset.go); }));
     } else if (p.kind === 'back') {
-      el.classList.add('cover', 'back');
-      el.innerHTML = `<div class="bk-cv"><img src="${window.ERGS_CREST || ''}" alt=""><h2>Keep learning</h2><div class="bk-rule"></div><p>New issues are released through the term.<br>Approved tools: Copilot · Gemini · NotebookLM</p></div>`;
+      el.classList.add('cv-back');
+      el.innerHTML = `<div class="cvb-in"><p class="cvb-eyebrow">About this series</p>
+        <p class="cvb-text">Each issue focuses on one practical skill, with a prompt to try, examples across the curriculum and a short challenge to use in your own classroom.</p>
+        <div class="cvb-rule"></div>
+        <dl><dt>Approved tools</dt><dd>Microsoft Copilot · Google Gemini · NotebookLM</dd><dt>Guiding principle</dt><dd>AI supports professional judgement – it never replaces it.</dd><dt>Data protection</dt><dd>Never enter pupil names or personal information into AI tools.</dd></dl></div>
+        <div class="cvb-foot"><img src="${window.ERGS_CREST || ''}" alt=""><div><b>Enniskillen Royal Grammar School</b><span>AI in School: A Teacher’s Guide · For staff use only</span></div></div>`;
     } else if (p.kind === 'info') {
       el.innerHTML = `<div class="bk-info"><small>Issue ${p.issue.n}</small><h3>${esc(p.issue.title)}</h3><p>${esc(p.issue.summary || '')}</p><a href="#issue-${esc(p.issue.id)}">Open this issue</a></div>`;
     } else {
