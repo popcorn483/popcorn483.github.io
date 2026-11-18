@@ -189,6 +189,8 @@ function renderLibrary() {
   const all = allIssues(), live = all.filter(i => status(i) === 'live'), soon = all.filter(i => status(i) !== 'live' && status(i) !== 'removed');
   $('#stats').innerHTML = `<div class="stat"><b>${live.length}</b><span>issues to explore</span></div><div class="stat"><b>${new Set(live.map(i => i.theme)).size}</b><span>themes covered</span></div>` +
     (canManage() ? `<div class="stat"><b>${soon.length}</b><span>locked (only you see this)</span></div>` : `<div class="stat"><b>5</b><span>minutes to read</span></div>`);
+  const bc = document.querySelector('.bp-crest'); if (bc && !bc.src) bc.src = window.ERGS_CREST || '';
+  { const pg = live.reduce((t, i) => t + ((i.imgs || i.pageDocs || [1]).length), 0); $('#bpCount').textContent = `${live.length} issues` + (pg > live.length ? ` · ${pg} pages` : ''); }
   const L = latestIssue();
   $('#latest').hidden = !L;
   if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">Latest issue · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
