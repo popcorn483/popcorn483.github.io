@@ -181,7 +181,7 @@ function renderLibrary() {
     (canManage() ? `<div class="stat"><b>${soon.length}</b><span>locked (only you see this)</span></div>` : `<div class="stat"><b>5</b><span>minutes to read</span></div>`);
   const L = latestIssue();
   $('#latest').hidden = !L;
-  if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">New this week · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
+  if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">Latest issue · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
   const ab = $('#adminBar');
   ab.hidden = !ADMIN;
   if (ADMIN) {
