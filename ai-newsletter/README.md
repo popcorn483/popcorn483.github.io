@@ -6,7 +6,7 @@ The ERGS staff AI newsletter library. Live at **https://popcorn483.github.io/ai-
 Open the link and enter the staff password once. Tick "Remember me" to stay unlocked on that device; **Lock** in the top bar forgets it.
 
 ## Releasing issues (editor only)
-1. Open the site and click **Staff admin**.
+1. Open the site and click **Staff admin**....
 2. Enter `jbutler803@c2ken.net` and click **Email me a sign-in link**. Open the link on the same device.
 3. In the **Release desk**:
    - **Release the next issue** releases the lowest-numbered locked issue.
