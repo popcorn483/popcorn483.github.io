@@ -663,3 +663,4 @@ body.clean .binder-promo h2{margin:0 0 4px}
 body.clean .binder-promo .bp-count{margin-left:0}
 }
 body.is-admin .toast{bottom:calc(70px + env(safe-area-inset-bottom))}
+body.clean .help-link{display:none}
