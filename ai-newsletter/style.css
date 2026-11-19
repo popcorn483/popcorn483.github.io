@@ -493,3 +493,17 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
   .tipgrid{grid-template-columns:1fr;gap:10px}
   .mast-nav{gap:13px}.mast-nav a,.linkbtn{font-size:13.5px}
 }
+
+/* usage panel */
+.usage-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 0}
+.usage-grid div{background:#fff;padding:14px 16px}
+.usage-grid b{display:block;font:600 28px/1.1 var(--serif);color:var(--navy)}
+.usage-grid span{font-size:13.5px;color:var(--muted)}
+.usage-bars{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;height:110px;align-items:end;padding:6px 0 0}
+.usage-bars div{height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative}
+.usage-bars i{display:block;width:70%;background:var(--navy);border-radius:3px 3px 0 0;min-height:2px}
+.usage-bars div:last-child i{background:var(--gold)}
+.usage-bars small{font-size:11px;color:var(--muted);margin-top:4px;white-space:nowrap}
+.usage-bars em{position:absolute;top:-2px;font:600 11px var(--body);font-style:normal;color:var(--muted)}
+.usage-note{font-size:13px;margin:8px 0 0}
+@media screen and (max-width:620px){.usage-grid{grid-template-columns:1fr 1fr}.usage-grid b{font-size:24px}}

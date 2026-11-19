@@ -1,11 +1,11 @@
 // AI in School: A Teacher's Guide — newsletter library
 // Content is encrypted with the staff password; release state lives in Firestore (ergs-live project).
 // Firebase loads on demand, so the library still opens if Firebase is unreachable (releases then fall back to defaults).
-let initializeApp, getFirestore, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp, getAuth, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut;
+let initializeApp, getFirestore, doc, collection, onSnapshot, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp, getAuth, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut;
 async function loadFirebase() {
   const V = 'https://www.gstatic.com/firebasejs/10.12.2/';
   const [a, f, u] = await Promise.all([import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js'), import(V + 'firebase-auth.js')]);
-  ({ initializeApp } = a); ({ getFirestore, doc, collection, onSnapshot, setDoc, getDoc, deleteDoc, serverTimestamp } = f);
+  ({ initializeApp } = a); ({ getFirestore, doc, collection, onSnapshot, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp } = f);
   ({ getAuth, onAuthStateChanged, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, signOut } = u);
 }
 
@@ -116,6 +116,7 @@ async function startFirebase() {
     render();
   });
   completeLink();
+  trackVisit();
 }
 let LINK_MSG = '';
 async function completeLink(emailTyped) {
@@ -356,6 +357,7 @@ function renderAdmin() {
     <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only ever see released issues – nothing about what’s still to come.</p>
     <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Upload a new issue</button></div>
   </div>
+  <div class="panel" id="usagePanel"><h2>Staff usage</h2><p class="muted">Loading…</p></div>
   <div class="panel" id="formPanel"${editing || formKind === 'open' ? '' : ' hidden'}>
     <h2>${editing && (editing.docId || editing.baseId) ? 'Edit issue ' + esc(editing.n) : 'Upload a new issue'}</h2>
     <p class="muted">${editing && editing.baseId ? 'Change the details below, or upload a replacement PDF. Leave the file empty to keep the current pages. You can undo your edits at any time.' : 'Upload a finished PDF (or image), or type it into the house template and it’s designed for you.'}</p>
@@ -399,6 +401,7 @@ function renderAdmin() {
   <div class="panel"><h2>All issues</h2><p class="muted">Edit any issue (title, number, theme or a replacement PDF), remove it, or upload a new one.</p><table class="rel"><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Release date</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
   ${removed.length ? `<div class="panel"><h2>Removed issues</h2><p class="muted">Hidden from everyone. Restore puts an issue back as locked.</p><table class="rel"><tbody>${removed.map(i => `<tr><td><b>${i.n}</b></td><td>${esc(i.title)}</td><td class="acts"><button class="btn small" data-restore="${esc(i.id)}">Restore</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
   wireAdmin(all);
+  renderUsage();
 }
 function wireAdmin(all) {
   $('#so').addEventListener('click', () => signOut(AUTH));
@@ -772,5 +775,52 @@ function renderTips() {
   }
   const list = TIPS.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.text + ' ' + t.where).toLowerCase().includes(tipFilt.q)));
   $('#tipGrid').innerHTML = list.length ? list.map(tipCard).join('') : '<p class="empty">No tips match that search.</p>';
+}
+/* ---------- anonymous usage: one record per device that has unlocked the site ----------
+   Stores a random device id, first/last visit, visit count, installed-app and phone flags. No names or emails.
+   The token is derived from the staff key, so only devices that know the password can write. Only the editor can read. */
+async function visitToken() {
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', KEY));
+  const pre = new TextEncoder().encode('ainl-visit:'); const buf = new Uint8Array(pre.length + raw.length); buf.set(pre); buf.set(raw, pre.length);
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+}
+async function trackVisit() {
+  try {
+    if (!DB || !KEY) return;
+    let id = LS.get('ergsNL.dev'); if (!id) { id = 'd' + Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join(''); LS.set('ergsNL.dev', id); }
+    const lastSent = +LS.get('ergsNL.devT') || 0; if (Date.now() - lastSent < 6 * 3600e3) return;   // at most every 6 hours
+    const t = await visitToken(), ref = doc(DB, 'newsletterVisits', id);
+    const app = standalone(), mob = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    let prev = null; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch (e) {}
+    if (prev) await setDoc(ref, { t, first: prev.first, last: serverTimestamp(), n: (prev.n || 1) + 1, app: app || !!prev.app, mob });
+    else await setDoc(ref, { t, first: serverTimestamp(), last: serverTimestamp(), n: 1, app, mob });
+    LS.set('ergsNL.devT', String(Date.now()));
+  } catch (e) { console.warn('visit', e.code || e); }
+}
+async function renderUsage() {
+  const el = $('#usagePanel'); if (!el) return;
+  try {
+    const snap = await getDocs(collection(DB, 'newsletterVisits'));
+    const now = Date.now(), day = 864e5, rows = snap.docs.map(d => d.data()).map(x => ({ first: x.first?.toMillis?.() || 0, last: x.last?.toMillis?.() || 0, n: x.n || 1, app: !!x.app, mob: !!x.mob }));
+    const total = rows.length, a7 = rows.filter(r => now - r.last < 7 * day).length, a30 = rows.filter(r => now - r.last < 30 * day).length;
+    const n7 = rows.filter(r => now - r.first < 7 * day).length, apps = rows.filter(r => r.app).length, phones = rows.filter(r => r.mob).length, visits = rows.reduce((t, r) => t + r.n, 0);
+    const weeks = Array.from({ length: 8 }, (_, k) => rows.filter(r => r.first && now - r.first >= (7 - k) * 7 * day && now - r.first < (8 - k) * 7 * day).length);
+    const mx = Math.max(1, ...weeks);
+    el.innerHTML = `<h2>Staff usage</h2><p class="muted">Each device that has entered the staff password is counted once. Anonymous – no names or emails are stored.</p>
+      <div class="usage-grid">
+        <div><b>${total}</b><span>devices unlocked</span></div>
+        <div><b>${a7}</b><span>active in the last 7 days</span></div>
+        <div><b>${a30}</b><span>active in the last 30 days</span></div>
+        <div><b>${n7}</b><span>new this week</span></div>
+        <div><b>${apps}</b><span>using the installed app</span></div>
+        <div><b>${visits}</b><span>visits in total</span></div>
+      </div>
+      <div class="usage-bars" aria-label="New devices per week, last 8 weeks">${weeks.map((w, k) => `<div title="${w} new"><i style="height:${Math.round(w / mx * 100)}%"></i><small>${k === 7 ? 'This wk' : (7 - k) + 'w'}</small><em>${w || ''}</em></div>`).join('')}</div>
+      <p class="muted usage-note">New devices per week · ${phones} of ${total} are phones or tablets. One person may use more than one device.</p>`;
+  } catch (e) {
+    el.innerHTML = /permission/.test(String(e.code || e.message))
+      ? `<h2>Staff usage</h2><p class="note">Usage counting needs a one-off Firebase rules update. Add the <b>newsletterVisits</b> block from <code>firestore-rules-snippet.txt</code> to your Firestore rules – counting starts as soon as it’s published.</p>`
+      : `<h2>Staff usage</h2><p class="muted">Couldn’t load usage figures (${esc(e.code || e.message)}).</p>`;
+  }
 }
 boot();

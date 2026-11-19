@@ -15,3 +15,16 @@
       allow write: if nlEditor() && request.resource.data.data is string && request.resource.data.data.size() < 1000000;
       allow delete: if nlEditor();
     }
+    // Anonymous staff usage: one doc per device. Only devices with the staff key (token) can write; only the editor can read.
+    match /newsletterVisits/{id} {
+      allow get: if true;               // a device can read its own (random, unguessable) record
+      allow list, delete: if nlEditor(); // only the editor sees the totals
+      allow create: if id.size() <= 40 && request.resource.data.keys().hasOnly(['t','first','last','n','app','mob'])
+        && request.resource.data.t == '0ddd4e393a7f0180e83d86fa' && request.resource.data.first == request.time
+        && request.resource.data.last == request.time && request.resource.data.n == 1
+        && request.resource.data.app is bool && request.resource.data.mob is bool;
+      allow update: if request.resource.data.keys().hasOnly(['t','first','last','n','app','mob'])
+        && request.resource.data.t == '0ddd4e393a7f0180e83d86fa' && request.resource.data.first == resource.data.first
+        && request.resource.data.last == request.time && request.resource.data.n == resource.data.n + 1
+        && request.resource.data.app is bool && request.resource.data.mob is bool;
+    }
