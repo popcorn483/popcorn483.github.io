@@ -765,7 +765,13 @@ const Binder = (() => {
     let rt; window.addEventListener('resize', () => { if (location.hash !== '#binder') return; clearTimeout(rt); rt = setTimeout(() => { const wasSingle = single; const pIdx = single ? spread : Math.max(0, leftIdx(spread)); layout(); if (wasSingle !== single) go(pIdx); else draw(); }, 150); });
   }
   async function print(all) {
-    const idxs = all ? pages.map((_, k) => k) : single ? [spread] : [leftIdx(spread), rightIdx(spread)].filter(k => k >= 0 && k < pages.length);
+    let idxs;
+    if (all) idxs = pages.map((_, k) => k);
+    else {   // the whole issue that's open (every page of it), or the cover/contents/back page if no issue is showing
+      const vis = single ? [spread] : [leftIdx(spread), rightIdx(spread)].filter(k => k >= 0 && k < pages.length);
+      const iss = vis.map(k => pages[k] && pages[k].issue).find(Boolean);
+      idxs = iss ? pages.map((p, k) => p.issue === iss ? k : -1).filter(k => k >= 0) : vis;
+    }
     let box = $('#bkPrint'); if (!box) { box = document.createElement('div'); box.id = 'bkPrint'; document.body.appendChild(box); }
     box.innerHTML = ''; idxs.forEach(k => { const el = pageEl(k); el.classList.add('bk-pp'); box.appendChild(el); });
     if (all) toast(`Preparing ${idxs.length} pages…`);
