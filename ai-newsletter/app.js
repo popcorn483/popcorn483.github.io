@@ -38,12 +38,14 @@ function fileImg(path) {
 }
 
 /* ---------- state ---------- */
-let CONTENT = null, RELEASES = {}, CUSTOM = [], ADMIN = false, AUTHUSER = null, STAFFVIEW = localStorage.getItem('ergsNL.sv') === '1', DB = null, AUTH = null;
+let CONTENT = null, RELEASES = {}, SERIES = null, CUSTOM = [], ADMIN = false, AUTHUSER = null, STAFFVIEW = localStorage.getItem('ergsNL.sv') === '1', DB = null, AUTH = null;
 let filt = { q: '', theme: '', tool: '' };
 
 function allIssues() {
   const o = CONTENT.orig.map(x => ({ ...x, id: 'w' + x.n, kind: 'img', imgs: ['img/w' + String(x.n).padStart(2, '0') + '.bin'], thumb: 'img/w' + String(x.n).padStart(2, '0') + '-t.bin', def: 'live' }));
-  const b = CONTENT.bank.map(x => ({ ...x, id: 'b' + x.n, kind: 'img', imgs: Array.from({ length: x.pages || 2 }, (_, k) => `img/b${x.n}-${k + 1}.bin`), thumb: `img/b${x.n}-t.bin`, def: 'locked' }));
+  // bank issues: only those placed in the series appear; their number comes from their position
+  const ser = seriesIds(), b = [];
+  ser.forEach((id, k) => { const x = bankById(id); if (x) b.push({ ...x, n: BANK_START + k }); });
   // edits to built-in issues are stored as override documents (encrypted) and merged in here
   const ov = {}; CUSTOM.filter(x => x.overrides).forEach(x => { ov[x.overrides] = x; });
   const merge = base => {
@@ -56,6 +58,17 @@ function allIssues() {
   };
   const c = CUSTOM.filter(x => !x.overrides).map(x => ({ ...x, custom: true, fsPages: true, def: 'locked' }));
   return [...o.map(merge), ...b.map(merge), ...c].sort((a, z) => a.n - z.n || String(a.id).localeCompare(z.id));
+}
+const BANK_START = 28;
+function bankItem(x) { return { ...x, key: x.n, id: 'b' + x.n, kind: 'img', bank: true, imgs: Array.from({ length: x.pages || 2 }, (_, k) => `img/b${x.n}-${k + 1}.bin`), thumb: `img/b${x.n}-t.bin`, def: 'locked' }; }
+function bankById(id) { const x = CONTENT.bank.find(z => 'b' + z.n === id); return x ? bankItem(x) : null; }
+function seriesIds() { return (SERIES || CONTENT.bank.filter(x => x.n <= 52).map(x => 'b' + x.n)).filter(id => CONTENT.bank.some(z => 'b' + z.n === id)); }
+function poolIssues() { const s = new Set(seriesIds()); return CONTENT.bank.filter(x => !s.has('b' + x.n)).map(bankItem); }
+function saveSeries(arr, msg) {
+  if (!ADMIN || !DB) return toast('Sign in at Staff admin to change the series');
+  SERIES = arr; render();
+  writing = writing.then(() => setDoc(doc(DB, 'newsletter', 'state'), { series: arr, updated: serverTimestamp() }, { merge: true }))
+    .then(() => msg && toast(msg)).catch(e => { console.warn(e); toast('Couldn’t save – check you’re signed in'); });
 }
 function status(i) {
   const r = RELEASES[i.id];
@@ -104,7 +117,7 @@ async function startFirebase() {
     await loadFirebase();
     const app = initializeApp(C.firebase); DB = getFirestore(app); AUTH = getAuth(app);
   } catch (e) { console.warn(e); return; }
-  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {}, used: d.usedTips || {} }; SHEETHIDE = d.hiddenSheets || {}; render(); if (location.hash === '#tips') renderTips(); if (location.hash === '#help') renderSheets(); }, e => console.warn('state', e));
+  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; SERIES = Array.isArray(d.series) ? d.series : null; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {}, used: d.usedTips || {} }; SHEETHIDE = d.hiddenSheets || {}; render(); if (location.hash === '#tips') renderTips(); if (location.hash === '#help') renderSheets(); }, e => console.warn('state', e));
   onSnapshot(collection(DB, 'newsletterIssues'), async s => {
     const out = [];
     for (const d of s.docs) { try { const x = await decJSON(d.data().enc); out.push({ ...x, id: 'c' + d.id, docId: d.id }); } catch (e) {} }
@@ -277,20 +290,21 @@ async function customPageImg(docId) {
   return imgCache.get(k);
 }
 function renderReader(id) {
-  const all = allIssues(), i = all.find(x => x.id === id);
+  const all = allIssues(); let i = all.find(x => x.id === id), inPool = false;
+  if (!i && canManage()) { i = poolIssues().find(x => x.id === id); inPool = !!i; if (i) i = { ...i, n: '–' }; }
   const sheet = $('#sheet');
   if (!i) { sheet.innerHTML = '<p class="empty">Issue not found – it may still be loading.</p>'; return; }
-  const st = status(i);
+  const st = inPool ? 'pool' : status(i);
   if (st !== 'live' && !canManage()) { sheet.innerHTML = '<div class="info"><h1>This issue isn’t available</h1><p>Have a look through the library for the latest issues.</p><a class="btn" href="#">Back to the library</a></div>'; $('#lockNote').hidden = true; return; }
   $('#lockNote').hidden = st === 'live';
-  $('#lockNote').textContent = st === 'sched' ? `Preview – scheduled for release on ${fmtDate(RELEASES[i.id].d)}. Staff can’t see this yet.` : 'Preview – this issue is locked. Staff can’t see it yet.';
-  const visible = all.filter(x => status(x) === 'live' || (canManage() && status(x) !== 'removed'));
-  const idx = visible.indexOf(i);
+  $('#lockNote').textContent = st === 'pool' ? 'Preview – this issue is in the issue bank. Add it to the series on the release desk to give it a number.' : st === 'sched' ? `Preview – scheduled for release on ${fmtDate(RELEASES[i.id].d)}. Staff can’t see this yet.` : 'Preview – this issue is locked. Staff can’t see it yet.';
+  const visible = inPool ? poolIssues() : all.filter(x => status(x) === 'live' || (canManage() && status(x) !== 'removed'));
+  const idx = visible.findIndex(x => x.id === i.id);
   $('#prevBtn').disabled = idx <= 0; $('#nextBtn').disabled = idx >= visible.length - 1;
   $('#prevBtn').onclick = () => { location.hash = 'issue-' + visible[idx - 1].id; };
   $('#nextBtn').onclick = () => { location.hash = 'issue-' + visible[idx + 1].id; };
   $('#printBtn').onclick = () => window.print();
-  $('#editIssueBtn').hidden = !canManage(); $('#editIssueBtn').onclick = () => startEdit(i);
+  $('#editIssueBtn').hidden = !canManage() || inPool; $('#editIssueBtn').onclick = () => startEdit(i);
   document.title = `Issue ${i.n}: ${i.title} · AI in School`;
   if (i.kind === 'tpl') sheet.innerHTML = tplHTML(i);
   else {
@@ -355,7 +369,8 @@ function renderAdmin() {
   const rows = all.filter(i => status(i) !== 'removed').map(i => {
     const r = RELEASES[i.id] || {}, st = status(i), sel = r.s || i.def;
     const src = i.custom ? 'uploaded by you' : i.id.startsWith('b') ? 'new issue' : 'original';
-    const acts = `<button class="btn small" data-edit="${esc(i.id)}">Edit</button> ` + (i.custom ? `<button class="btn small danger" data-del="${esc(i.id)}">Delete</button>` : `<button class="btn small danger" data-rm="${esc(i.id)}">Remove</button>`) + (i.edited ? ` <button class="btn small" data-undo="${esc(i.id)}">Undo edits</button>` : '');
+    const ord = i.bank && st !== 'live' ? `<span class="ordbtns"><button class="btn small" data-up="${esc(i.id)}" title="Move earlier">↑</button><button class="btn small" data-down="${esc(i.id)}" title="Move later">↓</button><button class="btn small" data-next="${esc(i.id)}" title="Make this the next issue">Next</button><button class="btn small" data-pool="${esc(i.id)}" title="Take out of the series">To bank</button></span> ` : '';
+    const acts = ord + `<button class="btn small" data-edit="${esc(i.id)}">Edit</button> ` + (i.custom ? `<button class="btn small danger" data-del="${esc(i.id)}">Delete</button>` : `<button class="btn small danger" data-rm="${esc(i.id)}">Remove</button>`) + (i.edited ? ` <button class="btn small" data-undo="${esc(i.id)}">Undo edits</button>` : '');
     return `<tr class="${st}"><td><b>${i.n}</b></td><td><a href="#issue-${esc(i.id)}">${esc(i.title)}</a><br><small class="muted">${esc(i.theme || '')} · ${src}${i.edited ? ' · edited' : ''}</small></td>
       <td><select data-s="${esc(i.id)}"><option value="live"${sel === 'live' ? ' selected' : ''}>Released</option><option value="locked"${sel === 'locked' ? ' selected' : ''}>Locked</option><option value="sched"${sel === 'sched' ? ' selected' : ''}>Scheduled</option></select></td>
       <td>${sel === 'sched' ? `<input type="date" data-d="${esc(i.id)}" value="${esc(r.d || '')}">` : ''}</td>
@@ -415,9 +430,58 @@ function renderAdmin() {
     </form>
   </div>
   <div class="panel"><h2>All issues</h2><p class="muted">Edit any issue (title, number, theme or a replacement PDF), remove it, or upload a new one.</p><table class="rel"><thead><tr><th>#</th><th>Issue</th><th>Status</th><th>Release date</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  ${bankPanel()}
   ${removed.length ? `<div class="panel"><h2>Removed issues</h2><p class="muted">Hidden from everyone. Restore puts an issue back as locked.</p><table class="rel"><tbody>${removed.map(i => `<tr><td><b>${i.n}</b></td><td>${esc(i.title)}</td><td class="acts"><button class="btn small" data-restore="${esc(i.id)}">Restore</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
   wireAdmin(all);
   renderUsage();
+}
+/* ---------- issue bank & series order ---------- */
+let bankFilt = { q: '', theme: '', shown: 24 };
+function bankPanel() {
+  const pool = poolIssues(), f = bankFilt;
+  const list = pool.filter(x => (!f.theme || x.theme === f.theme) && (!f.q || (x.title + ' ' + x.theme + ' ' + (x.summary || '') + ' ' + (x.tools || []).join(' ')).toLowerCase().includes(f.q)));
+  const cards = list.slice(0, f.shown).map(x => `<div class="bk-card"><a class="bk-cov" href="#issue-${esc(x.id)}" title="Preview">${coverHTML(x)}</a><div class="bk-meta"><small>${esc(x.theme)}${x.level ? ' · ' + esc(x.level) : ''}</small><b>${esc(x.title)}</b><span class="muted">${esc((x.tools || []).join(' · '))}</span>
+    <div class="bk-acts"><a class="btn small" href="#issue-${esc(x.id)}">Preview</a><button class="btn small primary" data-add="${esc(x.id)}">Add to series</button><button class="btn small" data-addnext="${esc(x.id)}" title="Add as the very next issue">Add as next</button></div></div></div>`).join('');
+  return `<div class="panel" id="bankPanel"><div class="row"><h2 style="margin:0">Issue bank</h2><span class="spacer"></span><span class="muted">${pool.length} ready-made issues not yet in the series</span></div>
+    <p class="muted">Choose the issues you want and they join the series as locked, numbered in order. Reorder anything not yet released with the arrows in the table above.</p>
+    <div class="row"><input type="search" id="bankQ" placeholder="Search the bank" value="${esc(f.q)}"><select id="bankTheme"><option value="">All topics</option>${THEMES.map(t => `<option${f.theme === t ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+    <div class="bk-grid">${cards || '<p class="muted">No issues match.</p>'}</div>
+    ${list.length > f.shown ? `<div class="row" style="justify-content:center"><button class="btn" id="bankMore">Show more (${list.length - f.shown})</button></div>` : ''}</div>`;
+}
+function wireSeries(all) {
+  const ser = () => seriesIds().slice();
+  const isLive = id => { const i = all.find(x => x.id === id); return i && ['live', 'sched'].includes(status(i)); };
+  const firstOpen = s => { let k = s.length; while (k > 0 && !isLive(s[k - 1]) ) k--; return k; };   // first slot after the last released/scheduled issue
+  const num = id => BANK_START + ser().indexOf(id);
+  const movable = (s, k) => k >= 0 && k < s.length && !isLive(s[k]);
+  document.querySelectorAll('[data-up],[data-down]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.up || b.dataset.down, s = ser(), k = s.indexOf(id), d = b.dataset.up ? -1 : 1;
+    let j = k + d; while (j >= 0 && j < s.length && isLive(s[j])) j += d;
+    if (!movable(s, j)) return toast(d < 0 ? 'Already the earliest unreleased issue' : 'Already the last issue');
+    [s[k], s[j]] = [s[j], s[k]]; saveSeries(s, 'Order updated');
+  }));
+  document.querySelectorAll('[data-next]').forEach(b => b.addEventListener('click', () => {
+    const s = ser().filter(x => x !== b.dataset.next); s.splice(firstOpen(s), 0, b.dataset.next); saveSeries(s, `Now the next issue (Issue ${BANK_START + s.indexOf(b.dataset.next)})`);
+  }));
+  document.querySelectorAll('[data-pool]').forEach(b => b.addEventListener('click', () => {
+    const s = ser(), k = s.indexOf(b.dataset.pool);
+    if (s.slice(k + 1).some(isLive)) return toast('A later issue is already released – taking this out would renumber it');
+    s.splice(k, 1); saveSeries(s, 'Moved back to the issue bank');
+  }));
+  document.querySelectorAll('[data-add],[data-addnext]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.add || b.dataset.addnext, s = ser();
+    if (b.dataset.addnext) s.splice(firstOpen(s), 0, id); else s.push(id);
+    saveSeries(s, `Added as Issue ${BANK_START + s.indexOf(id)} (locked)`);
+  }));
+  const q = $('#bankQ'); if (q) q.addEventListener('input', () => { bankFilt.q = q.value.toLowerCase(); bankFilt.shown = 24; refreshBank(all); });
+  $('#bankTheme')?.addEventListener('change', e => { bankFilt.theme = e.target.value; bankFilt.shown = 24; refreshBank(all); });
+  $('#bankMore')?.addEventListener('click', () => { bankFilt.shown += 24; refreshBank(all); });
+  hydrateImgs($('#bankPanel'));
+}
+function refreshBank(all) {
+  const p = $('#bankPanel'), had = document.activeElement && document.activeElement.id === 'bankQ', pos = had ? document.activeElement.selectionStart : 0;
+  p.outerHTML = bankPanel(); wireSeries(all);
+  if (had) { const q = $('#bankQ'); q.focus(); q.setSelectionRange(pos, pos); }
 }
 function wireAdmin(all) {
   $('#so').addEventListener('click', () => signOut(AUTH));
@@ -432,6 +496,7 @@ function wireAdmin(all) {
   document.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => startEdit(all.find(i => i.id === b.dataset.edit))));
   const twice = (b, label, fn) => { let armed = false; b.addEventListener('click', async () => { if (!armed) { armed = true; const t = b.textContent; b.textContent = label; setTimeout(() => { armed = false; b.textContent = t; }, 3000); return; } await fn(); }); };
   document.querySelectorAll('[data-rm]').forEach(b => twice(b, 'Click again to remove', () => { const i = all.find(x => x.id === b.dataset.rm); setRelease(i.id, { s: 'removed' }, `Issue ${i.n} removed – restore it any time`); }));
+  wireSeries(all);
   document.querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', () => setRelease(b.dataset.restore, { s: 'locked' }, 'Restored (locked)')));
   document.querySelectorAll('[data-undo]').forEach(b => twice(b, 'Click again to undo', async () => {
     const i = all.find(x => x.id === b.dataset.undo);

@@ -679,3 +679,18 @@ body.clean .help-link{display:none}
   #bkPrint .bk-pp img{object-fit:contain}
 }
 @media screen and (max-width:760px){.bk-printmenu{right:auto;left:0}}
+
+/* issue bank */
+.bk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:12px}
+.bk-card{display:flex;gap:12px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fff}
+.bk-cov{flex:none;width:74px;aspect-ratio:210/297;overflow:hidden;border-radius:4px;border:1px solid var(--line);background:#eef1f5}
+.bk-cov img{width:100%;display:block}
+.bk-meta{display:flex;flex-direction:column;gap:3px;min-width:0}
+.bk-meta small{font:600 11px var(--head);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.bk-meta b{font:600 15px/1.25 var(--serif);color:var(--navy)}
+.bk-meta .muted{font-size:12.5px}
+.bk-acts{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto;padding-top:6px}
+#bankPanel input[type=search]{flex:1 1 220px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+#bankPanel select{padding:8px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.ordbtns{display:inline-flex;gap:4px;margin-right:6px;flex-wrap:wrap}
+.ordbtns .btn{padding-left:8px;padding-right:8px}
