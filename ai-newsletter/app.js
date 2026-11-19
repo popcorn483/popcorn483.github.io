@@ -830,7 +830,7 @@ function tipUses(id) {   // all dates a tip was used: as Tip of the day, or mark
 function tipAdminHTML(t) {
   const uses = tipUses(t.id);
   const usedLine = uses.length ? `<div class="tip-used"><b>Used ${uses.length}×</b> · ${uses.slice(0, 3).map(u => `${fmtDay(u.day)} <span>(${u.how === 'Tip of the day' ? 'tip of the day' : 'marked'})</span>`).join(', ')}${uses.length > 3 ? '…' : ''}</div>` : '<div class="tip-used none">Not used yet</div>';
-  return `${usedLine}<div class="tip-admin">${t.custom ? '<span class="muted">Added by you</span>' : ''}<button class="btn small" data-tipused="${esc(t.id)}">Mark as used today</button><button class="btn small" data-tiphide="${esc(t.id)}">Hide</button></div>`;
+  return `${usedLine}<div class="tip-admin">${t.custom ? '<span class="muted">Added by you</span>' : ''}${TIPLOG && TIPLOG[todayKey()] === t.id ? '<span class="tip-today">Today’s tip</span>' : `<button class="btn small primary" data-tiptoday="${esc(t.id)}">Use this today</button>`}<button class="btn small" data-tipused="${esc(t.id)}">Mark as used today</button><button class="btn small" data-tiphide="${esc(t.id)}">Hide</button></div>`;
 }
 function saveTipState(patch, msg) {
   if (!ADMIN || !DB) return toast('Sign in at Staff admin to change tips');
@@ -886,6 +886,14 @@ function renderTips() {
     const id = b.dataset.tiphide, t = allTips().find(x => x.id === id);
     if (t && t.custom) saveTipState({ customTips: { [id]: null } }, 'Tip removed');
     else saveTipState({ hiddenTips: { [id]: true } }, 'Tip hidden – restore it at the bottom of the page');
+  }));
+  document.querySelectorAll('[data-tiptoday]').forEach(b => b.addEventListener('click', async () => {
+    if (!ADMIN || !DB) return toast('Sign in at Staff admin to change tips');
+    const id = b.dataset.tiptoday, day = todayKey(); b.disabled = true;
+    try {
+      await setDoc(doc(DB, 'newsletterTipLog', day), { id, at: serverTimestamp(), t: await visitToken() });
+      TIPLOG = { ...(TIPLOG || {}), [day]: id }; toast('Set as today’s Tip of the day'); renderTips(); renderTipDay();
+    } catch (e) { b.disabled = false; toast('Couldn’t set it: ' + (e.code || e.message)); }
   }));
   document.querySelectorAll('[data-tipused]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.tipused, days = [...new Set([...(TIPSTATE.used[id] || []), todayKey()])];

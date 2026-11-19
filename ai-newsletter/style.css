@@ -619,3 +619,4 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
 .tipday .td-dots i{background:rgba(255,255,255,.35)}.tipday .td-dots i.on{background:#f2d48f}
 .tipday .td-arrow{background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
 .tipday .btn.ghost{color:#f2d48f}
+.tip-today{font:600 12px var(--body);color:#7d1e27;background:#fbecee;border-radius:4px;padding:4px 8px}
