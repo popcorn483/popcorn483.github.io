@@ -18,17 +18,39 @@
 <meta name="apple-mobile-web-app-title" content="AI in School">
 </head>
 <body>
+<div id="splash" class="splash" aria-hidden="true">
+  <div class="sp-bg"></div>
+  <div class="sp-center">
+    <div class="sp-crestwrap">
+      <svg class="sp-ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="56"/></svg>
+      <img class="sp-crest" id="splashCrest" alt="">
+    </div>
+    <p class="sp-school">Enniskillen Royal Grammar School</p>
+    <h1 class="sp-title">AI in School</h1>
+    <p class="sp-sub">A Teacher’s Guide</p>
+    <div class="sp-rule"></div>
+    <div class="sp-load"><span></span></div>
+  </div>
+  <p class="sp-foot">Staff Professional Learning</p>
+</div>
+
 <div id="gate" class="gate" hidden>
+  <div class="sp-bg"></div>
   <form class="gate-card" id="gateForm" autocomplete="off">
-    <img class="crest" id="gateCrest" alt="">
-    <p class="eyebrow">Enniskillen Royal Grammar School</p>
-    <h1>AI in School<span>A Teacher's Guide</span></h1>
-    <p class="muted">Whole-School AI Skills CPD Portfolio. Enter the staff password once – this device will remember it.</p>
+    <div class="sp-crestwrap small">
+      <svg class="sp-ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="56"/></svg>
+      <img class="sp-crest" id="gateCrest" alt="">
+    </div>
+    <p class="sp-school">Enniskillen Royal Grammar School</p>
+    <h1 class="sp-title">AI in School</h1>
+    <p class="sp-sub">A Teacher’s Guide</p>
+    <div class="sp-rule"></div>
+    <p class="gate-lede">Whole-School AI Skills CPD Portfolio. Enter the staff password once – this device will remember it.</p>
     <label class="sr" for="pw">Staff password</label>
-    <input id="pw" type="password" placeholder="Staff password" autocomplete="current-password" required>
-    <button class="btn primary wide" type="submit">Open the library</button>
+    <div class="gate-field"><input id="pw" type="password" placeholder="Staff password" autocomplete="current-password" required><button type="submit" aria-label="Open the library">Open <span aria-hidden="true">→</span></button></div>
     <p class="err" id="gateErr" role="alert"></p>
   </form>
+  <p class="sp-foot">For staff use only · Approved tools: Copilot · Gemini · NotebookLM</p>
 </div>
 
 <div id="app" hidden>

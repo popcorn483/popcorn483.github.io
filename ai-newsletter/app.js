@@ -73,11 +73,17 @@ async function tryKey() {
     return true;
   } catch (e) { return false; }
 }
+const SPLASH_T0 = performance.now();
+function hideSplash(minMs) {
+  const sp = $('#splash'); if (!sp || sp.classList.contains('out')) return Promise.resolve();
+  const wait = Math.max(0, minMs - (performance.now() - SPLASH_T0));
+  return new Promise(r => setTimeout(() => { sp.classList.add('out'); setTimeout(() => { sp.remove(); r(); }, 650); }, wait));
+}
 async function boot() {
-  $('#gateCrest').src = $('#mastCrest').src = window.ERGS_CREST || '';
+  $('#gateCrest').src = $('#mastCrest').src = $('#splashCrest').src = window.ERGS_CREST || '';
   const raw = LS.get('ergsNL.k') || SS.get('ergsNL.k');
-  if (raw) { try { KEY = await importRaw(raw); if (await tryKey()) return start(); } catch (e) {} }
-  $('#gate').hidden = false; $('#pw').focus();
+  if (raw) { try { KEY = await importRaw(raw); if (await tryKey()) { start(); return hideSplash(2200); } } catch (e) {} }
+  $('#splash')?.remove(); $('#gate').hidden = false; setTimeout(() => $('#pw').focus(), 1500);   // first visit: the password screen plays the same intro
 }
 $('#gateForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -87,8 +93,8 @@ $('#gateForm').addEventListener('submit', async e => {
     if (!(await tryKey())) throw 0;
     const raw = b64e(new Uint8Array(await crypto.subtle.exportKey('raw', KEY)));
     LS.set('ergsNL.k', raw);   // enter it once – this device stays unlocked
-    $('#gate').hidden = true; start();
-  } catch (err) { $('#gateErr').textContent = 'That password isn’t right. Please try again.'; }
+    $('#gate').classList.add('leaving'); setTimeout(() => { $('#gate').hidden = true; start(); }, 450);
+  } catch (err) { $('#gateErr').textContent = 'That password isn’t right. Please try again.'; const f = $('.gate-field'); f.classList.remove('shake'); void f.offsetWidth; f.classList.add('shake'); }
   btn.disabled = false;
 });
 
