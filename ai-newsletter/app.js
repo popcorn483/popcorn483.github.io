@@ -104,7 +104,7 @@ async function startFirebase() {
     await loadFirebase();
     const app = initializeApp(C.firebase); DB = getFirestore(app); AUTH = getAuth(app);
   } catch (e) { console.warn(e); return; }
-  onSnapshot(doc(DB, 'newsletter', 'state'), s => { RELEASES = (s.exists() && s.data().releases) || {}; render(); }, e => console.warn('state', e));
+  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {} }; render(); if (location.hash === '#tips') renderTips(); }, e => console.warn('state', e));
   onSnapshot(collection(DB, 'newsletterIssues'), async s => {
     const out = [];
     for (const d of s.docs) { try { const x = await decJSON(d.data().enc); out.push({ ...x, id: 'c' + d.id, docId: d.id }); } catch (e) {} }
@@ -753,28 +753,69 @@ const Binder = (() => {
 window.addEventListener('hashchange', () => { if (location.hash !== '#binder') Binder.active = false; });
 
 /* ---------- quick tips ---------- */
-const TIPS = (window.NL_TIPS || []).map(([app, title, text, where], k) => ({ k, app, title, text, where }));
-const TIP_APPS = [...new Set(TIPS.map(t => t.app))];
-let tipFilt = { q: '', app: '' }, tipOffset = 0, tipsWired = false;
-const tipCard = t => `<article class="tip-card"><span class="tip-app" data-app="${esc(t.app)}">${esc(t.app)}</span><h3>${esc(t.title)}</h3><p>${esc(t.text)}</p>${t.where ? `<p class="tip-where">${esc(t.where)}</p>` : ''}</article>`;
+const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+const BUILTIN_TIPS = (window.NL_TIPS || []).map(([app, level, title, why, steps]) => ({ id: slug(app + '-' + title), app, level, title, why, steps: (steps || []).filter(Boolean) }));
+let TIPSTATE = { hidden: {}, custom: {} };
+const allTips = () => [...BUILTIN_TIPS, ...Object.entries(TIPSTATE.custom).filter(([, t]) => t && t.title).map(([id, t]) => ({ id, custom: true, app: t.app, level: t.level, title: t.title, why: t.why || '', steps: (t.steps || []).filter(Boolean) }))];
+const visibleTips = () => allTips().filter(t => !TIPSTATE.hidden[t.id]);
+let tipFilt = { q: '', app: '', level: '' }, tipOffset = 0, tipsWired = false, tipFormOpen = false;
+const tipBody = t => `<p class="tip-why">${esc(t.why)}</p>${t.steps.length ? `<ol class="tip-steps">${t.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}`;
+const tipCard = t => `<article class="tip-card"><div class="tip-top"><span class="tip-app" data-app="${esc(t.app)}">${esc(t.app)}</span><span class="tip-lvl${t.level === 'New to this' ? ' new' : ''}">${esc(t.level)}</span></div><h3>${esc(t.title)}</h3>${tipBody(t)}${canManage() ? `<div class="tip-admin">${t.custom ? '<span class="muted">Added by you</span>' : ''}<button class="btn small" data-tiphide="${esc(t.id)}">Hide</button></div>` : ''}</article>`;
 function renderTipDay() {
-  const el = $('#tipDay'); if (!el || !TIPS.length) return;
+  const el = $('#tipDay'); if (!el) return;
+  const vis = visibleTips(); if (!vis.length) { el.hidden = true; return; } el.hidden = false;
+  const beg = vis.filter(t => t.level === 'New to this'), pool = beg.length ? beg : vis;   // the daily tip is a beginner-friendly one
   const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
-  const t = TIPS[((day + tipOffset) % TIPS.length + TIPS.length) % TIPS.length];
+  const t = pool[((day + tipOffset) % pool.length + pool.length) % pool.length];
   el.innerHTML = `<div class="td-label"><span>Tip of the day</span><b data-app="${esc(t.app)}">${esc(t.app)}</b></div>
-    <div class="td-body"><h3>${esc(t.title)}</h3><p>${esc(t.text)}</p>${t.where ? `<p class="tip-where">${esc(t.where)}</p>` : ''}</div>
-    <div class="td-acts"><button class="btn small" id="tdNext">Another tip</button><a class="btn small ghost" href="#tips">All ${TIPS.length} tips →</a></div>`;
+    <div class="td-body"><h3>${esc(t.title)}</h3>${tipBody(t)}</div>
+    <div class="td-acts"><button class="btn small" id="tdNext">Another tip</button><a class="btn small ghost" href="#tips">All ${vis.length} tips →</a></div>`;
   $('#tdNext').onclick = () => { tipOffset++; renderTipDay(); };
 }
+function saveTipState(patch, msg) {
+  if (!ADMIN || !DB) return toast('Sign in at Staff admin to change tips');
+  setDoc(doc(DB, 'newsletter', 'state'), { releases: {}, ...patch, updated: serverTimestamp() }, { merge: true }).then(() => msg && toast(msg)).catch(e => toast('Couldn’t save: ' + (e.code || e.message)));
+}
 function renderTips() {
+  const apps = [...new Set(allTips().map(t => t.app))];
   if (!tipsWired) {
     tipsWired = true;
-    $('#tipChips').innerHTML = ['All', ...TIP_APPS].map(a => `<button class="chip${a === 'All' ? ' on' : ''}" data-a="${esc(a === 'All' ? '' : a)}">${esc(a)}</button>`).join('');
-    $('#tipChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; tipFilt.app = b.dataset.a; $('#tipChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b)); renderTips(); });
+    $('#tipChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; tipFilt.app = b.dataset.a; renderTips(); });
     $('#tipQ').addEventListener('input', e => { tipFilt.q = e.target.value.toLowerCase(); renderTips(); });
+    $('#tipLvl').addEventListener('change', e => { tipFilt.level = e.target.value; renderTips(); });
   }
-  const list = TIPS.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.text + ' ' + t.where).toLowerCase().includes(tipFilt.q)));
-  $('#tipGrid').innerHTML = list.length ? list.map(tipCard).join('') : '<p class="empty">No tips match that search.</p>';
+  $('#tipChips').innerHTML = ['All', ...apps].map(a => { const v = a === 'All' ? '' : a; return `<button class="chip${tipFilt.app === v ? ' on' : ''}" data-a="${esc(v)}">${esc(a)}</button>`; }).join('');
+  const vis = visibleTips();
+  const list = vis.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.level || t.level === tipFilt.level) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.why + ' ' + t.steps.join(' ')).toLowerCase().includes(tipFilt.q)));
+  $('#tipCount').textContent = `${list.length} of ${vis.length} tips`;
+  // editor tools
+  const hidden = allTips().filter(t => TIPSTATE.hidden[t.id]);
+  const ab = $('#tipAdmin'); ab.hidden = !canManage();
+  if (canManage()) {
+    ab.innerHTML = `<div class="adminbar"><b>Editor</b><span>Hide tips that don’t suit your staff, or add your own. Staff never see these controls.</span><span class="spacer"></span><button class="btn small primary" id="tipAddBtn">${tipFormOpen ? 'Close' : '+ Add a tip'}</button></div>
+      ${tipFormOpen ? `<form class="panel tipform" id="tipForm">
+        <div class="row"><div class="field"><label>App</label><input name="app" list="tipApps" required placeholder="e.g. Google Classroom"><datalist id="tipApps">${apps.map(a => `<option value="${esc(a)}">`).join('')}</datalist></div>
+        <div class="field" style="flex:0 1 180px"><label>Level</label><select name="level"><option>New to this</option><option>Next step</option></select></div></div>
+        <div class="field"><label>Title</label><input name="title" required maxlength="80"></div>
+        <div class="field"><label>Why it helps</label><textarea name="why" rows="2" maxlength="300"></textarea></div>
+        <div class="field"><label>Steps (one per line)</label><textarea name="steps" rows="4" maxlength="800"></textarea></div>
+        <button class="btn primary" type="submit">Save tip</button></form>` : ''}`;
+    $('#tipAddBtn').onclick = () => { tipFormOpen = !tipFormOpen; renderTips(); };
+    $('#tipForm')?.addEventListener('submit', e => {
+      e.preventDefault(); const f = new FormData(e.target), g = k => (f.get(k) || '').toString().trim();
+      const t = { app: g('app'), level: g('level'), title: g('title'), why: g('why'), steps: g('steps').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 8) };
+      const id = 'c-' + slug(t.app + '-' + t.title) + '-' + Date.now().toString(36);
+      tipFormOpen = false; saveTipState({ customTips: { [id]: t } }, 'Tip added');
+    });
+  }
+  $('#tipGrid').innerHTML = (list.length ? list.map(tipCard).join('') : '<p class="empty">No tips match that search.</p>') +
+    (canManage() && hidden.length ? `<div class="tip-hidden"><h3>Hidden tips (${hidden.length})</h3><p class="muted">Staff can’t see these.</p>${hidden.map(t => `<div class="th-row"><span><b>${esc(t.app)}</b> · ${esc(t.title)}</span><button class="btn small" data-tipshow="${esc(t.id)}">Restore</button></div>`).join('')}</div>` : '');
+  document.querySelectorAll('[data-tiphide]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.tiphide, t = allTips().find(x => x.id === id);
+    if (t && t.custom) saveTipState({ customTips: { [id]: null } }, 'Tip removed');
+    else saveTipState({ hiddenTips: { [id]: true } }, 'Tip hidden – restore it at the bottom of the page');
+  }));
+  document.querySelectorAll('[data-tipshow]').forEach(b => b.addEventListener('click', () => saveTipState({ hiddenTips: { [b.dataset.tipshow]: false } }, 'Tip restored')));
 }
 /* ---------- anonymous usage: one record per device that has unlocked the site ----------
    Stores a random device id, first/last visit, visit count, installed-app and phone flags. No names or emails.

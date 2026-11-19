@@ -141,9 +141,11 @@
     <div class="tips-head">
       <p class="eyebrow">Quick tips</p>
       <h1>Small things that save time</h1>
-      <p class="muted">Everyday shortcuts for Google Classroom, Gmail, Google Docs, Word, PowerPoint, Excel, Teams, OneNote, Outlook and more. No AI required.</p>
+      <p class="muted">Step-by-step help with AI, Google Classroom, Outlook and Office. Look for <b class="tip-lvl new">New to this</b> if you’re just starting, or <b class="tip-lvl">Next step</b> when you’re ready for more.</p>
     </div>
-    <div class="toolbar"><input type="search" id="tipQ" placeholder="Search tips, e.g. schedule, marking, shortcut"><div class="chips" id="tipChips"></div></div>
+    <div id="tipAdmin" hidden></div>
+    <div class="toolbar"><input type="search" id="tipQ" placeholder="Search tips, e.g. rules, marking, schedule"><select id="tipLvl" aria-label="Level"><option value="">All levels</option><option>New to this</option><option>Next step</option></select><div class="chips" id="tipChips"></div></div>
+    <p class="tip-count muted" id="tipCount"></p>
     <div class="tipgrid" id="tipGrid"></div>
   </main>
 
