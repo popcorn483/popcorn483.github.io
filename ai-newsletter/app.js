@@ -745,6 +745,10 @@ const Binder = (() => {
     $('#bkNext').addEventListener('click', () => flip(1));
     $('#bkJump').addEventListener('change', e => { if (e.target.value !== '') go(+e.target.value); e.target.value = ''; });
     $('#bkRange').addEventListener('input', e => { spread = +e.target.value; draw(); });
+    const pm = $('#bkPrintMenu');
+    $('#bkPrintBtn').addEventListener('click', e => { e.stopPropagation(); pm.hidden = !pm.hidden; });
+    document.addEventListener('click', e => { if (!e.target.closest('#bkPrintMenu')) pm.hidden = true; });
+    pm.addEventListener('click', e => { const b = e.target.closest('[data-pr]'); if (!b) return; pm.hidden = true; print(b.dataset.pr === 'all'); });
     $('#bkFull').addEventListener('click', () => { const el = $('#binder'); (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen?.())?.catch?.(() => {}); });
     document.addEventListener('fullscreenchange', () => setTimeout(() => { layout(); draw(); }, 120));
     st().addEventListener('click', e => {
@@ -760,8 +764,20 @@ const Binder = (() => {
     document.addEventListener('keydown', e => { if (location.hash !== '#binder') return; if (e.key === 'ArrowRight') flip(1); if (e.key === 'ArrowLeft') flip(-1); });
     let rt; window.addEventListener('resize', () => { if (location.hash !== '#binder') return; clearTimeout(rt); rt = setTimeout(() => { const wasSingle = single; const pIdx = single ? spread : Math.max(0, leftIdx(spread)); layout(); if (wasSingle !== single) go(pIdx); else draw(); }, 150); });
   }
+  async function print(all) {
+    const idxs = all ? pages.map((_, k) => k) : single ? [spread] : [leftIdx(spread), rightIdx(spread)].filter(k => k >= 0 && k < pages.length);
+    let box = $('#bkPrint'); if (!box) { box = document.createElement('div'); box.id = 'bkPrint'; document.body.appendChild(box); }
+    box.innerHTML = ''; idxs.forEach(k => { const el = pageEl(k); el.classList.add('bk-pp'); box.appendChild(el); });
+    if (all) toast(`Preparing ${idxs.length} pages…`);
+    const imgs = [...box.querySelectorAll('img')];
+    await Promise.all(imgs.map(im => new Promise(res => { const t0 = Date.now(); (function w() { if ((im.getAttribute('src') && im.complete) || Date.now() - t0 > 20000) res(); else setTimeout(w, 80); })(); })));
+    document.body.classList.add('bk-printing');
+    const done = () => { document.body.classList.remove('bk-printing'); box.innerHTML = ''; removeEventListener('afterprint', done); };
+    addEventListener('afterprint', done);
+    setTimeout(() => window.print(), 50);
+  }
   return {
-    active: false,
+    active: false, print,
     open() { this.active = true; wire(); const s2 = JSON.stringify(issuesInBinder().map(i => i.id + status(i))); if (!built || s2 !== sig) { buildPages(); built = true; sig = s2; spread = 0; } layout(); draw(); document.title = 'Binder · AI in School'; },
     refresh() { const s2 = JSON.stringify(issuesInBinder().map(i => i.id + status(i))); if (s2 !== sig) { sig = s2; buildPages(); spread = Math.min(spread, maxSpread()); layout(); draw(); } }
   };

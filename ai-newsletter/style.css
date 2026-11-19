@@ -664,3 +664,18 @@ body.clean .binder-promo .bp-count{margin-left:0}
 }
 body.is-admin .toast{bottom:calc(70px + env(safe-area-inset-bottom))}
 body.clean .help-link{display:none}
+.bk-pwrap{position:relative}
+.bk-printmenu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.3);padding:5px;z-index:40;display:flex;flex-direction:column;min-width:200px}
+.bk-printmenu[hidden]{display:none}
+.bk-printmenu button{border:0;background:none;text-align:left;padding:9px 12px;border-radius:5px;font:600 14px var(--head);color:var(--ink);cursor:pointer;white-space:nowrap}
+.bk-printmenu button:hover{background:#eef1f5}
+#bkPrint{display:none}
+@media print{
+  body.bk-printing>*:not(#bkPrint){display:none!important}
+  body.bk-printing #bkPrint{display:block!important;--pw:210mm;--ph:297mm}
+  #bkPrint .bk-pp{width:210mm;height:297mm;box-shadow:none;border-radius:0;break-after:page;page-break-after:always}
+  #bkPrint .bk-pp:last-child{break-after:auto;page-break-after:auto}
+  #bkPrint .bk-pp::after,#bkPrint .bk-lock{display:none}
+  #bkPrint .bk-pp img{object-fit:contain}
+}
+@media screen and (max-width:760px){.bk-printmenu{right:auto;left:0}}
