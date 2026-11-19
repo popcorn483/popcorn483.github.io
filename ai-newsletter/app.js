@@ -152,7 +152,7 @@ function render() {
   document.body.classList.toggle('binder-on', h === 'binder');
   if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
   else if (h === 'binder') { $('#binder').hidden = false; Binder.open(); }
-  else if (h === 'tips') { $('#tips').hidden = false; renderTips(); document.title = 'Quick tips · AI in School'; }
+  else if (h === 'tips') { if (!canManage()) { location.replace('#help'); return; } $('#tips').hidden = false; renderTips(); document.title = 'Quick tips · AI in School'; }
   else if (h === 'help') { $('#help').hidden = false; renderSheets(); document.title = 'Help sheets · AI in School'; }
   else if (h.startsWith('sheet-')) { $('#sheetView').hidden = false; renderSheet(+h.slice(6)); }
   else if (h.startsWith('issue-')) { $('#reader').hidden = false; renderReader(h.slice(6)); }
@@ -797,6 +797,7 @@ async function ensureTodayTip() {
 }
 // staff only see tips that have already had their day (Tip of the day, or marked as used) before today
 const releasedTips = () => visibleTips().filter(t => tipUses(t.id).some(u => u.day < todayKey()));
+function lastUse(id) { return tipUses(id).map(u => u.day).sort().pop() || ''; }
 function renderTipDay() {
   const el = $('#tipDay'); if (!el) return;
   const vis = visibleTips(); if (!vis.length) { el.hidden = true; return; } el.hidden = false;
@@ -806,17 +807,19 @@ function renderTipDay() {
     const beg = vis.filter(x => x.level === 'New to this'), pool = beg.length ? beg : vis;
     t = TIPLOG ? chooseTip(vis) : pool[Math.floor(Date.now() / 864e5) % pool.length];
   }
-  // "Another tip" only moves through tips staff have already had (never ahead of the daily release)
-  const past = (canManage() ? vis : releasedTips()).filter(x => x.id !== t.id);
-  const today = t;
-  if (tipOffset && past.length) t = past[(tipOffset - 1) % past.length];
-  const label = t === today ? 'Tip of the day' : 'From an earlier day';
-  el.innerHTML = `<div class="td-label"><span>${label}</span><b data-app="${esc(t.app)}">${esc(t.app)}</b></div>
-    <div class="td-body"><h3>${esc(t.title)}</h3>${tipBody(t)}</div>
-    <div class="td-acts">${past.length ? `<button class="btn small" id="tdNext">${tipOffset ? 'Another earlier tip' : 'Earlier tips'}</button>` : ''}${t !== today ? '<button class="btn small ghost" id="tdToday">Back to today’s tip</button>' : ''}${past.length ? `<a class="btn small ghost" href="#tips">All ${canManage() ? vis.length : past.length} tips →</a>` : ''}</div>`;
-  if ($('#tdNext')) $('#tdNext').onclick = () => { tipOffset++; renderTipDay(); };
-  if ($('#tdToday')) $('#tdToday').onclick = () => { tipOffset = 0; renderTipDay(); };
-  if (!logged && !tipOffset) ensureTodayTip();
+  // today's tip first, then earlier tips (most recent first) – staff swipe back through them
+  const past = releasedTips().filter(x => x.id !== t.id).sort((a, b) => lastUse(b.id).localeCompare(lastUse(a.id)));
+  const items = [t, ...past];
+  const card = (x, k) => `<div class="td-card"><div class="td-label"><span>${k ? fmtDay(lastUse(x.id)) : 'Tip of the day'}</span><b data-app="${esc(x.app)}">${esc(x.app)}</b></div><h3>${esc(x.title)}</h3>${tipBody(x)}</div>`;
+  el.innerHTML = `<div class="td-track" id="tdTrack">${items.map(card).join('')}</div>
+    <div class="td-foot">${items.length > 1 ? `<span class="td-hint">Swipe for earlier tips</span><span class="td-dots">${items.slice(0, 12).map((_, k) => `<i class="${k ? '' : 'on'}"></i>`).join('')}</span><span class="td-nav"><button class="td-arrow" id="tdPrev" aria-label="Newer tip" disabled>‹</button><button class="td-arrow" id="tdNext" aria-label="Earlier tip">›</button></span>` : '<span class="td-hint">A new tip every day</span>'}${canManage() ? '<a class="btn small ghost" href="#tips">Manage tips →</a>' : ''}</div>`;
+  const tr = $('#tdTrack');
+  const sync = () => { const k = Math.round(tr.scrollLeft / tr.clientWidth); el.querySelectorAll('.td-dots i').forEach((d, i) => d.classList.toggle('on', i === Math.min(k, 11)));
+    if ($('#tdPrev')) { $('#tdPrev').disabled = k <= 0; $('#tdNext').disabled = k >= items.length - 1; } };
+  tr.addEventListener('scroll', () => requestAnimationFrame(sync), { passive: true });
+  $('#tdPrev')?.addEventListener('click', () => tr.scrollBy({ left: -tr.clientWidth, behavior: 'smooth' }));
+  $('#tdNext')?.addEventListener('click', () => tr.scrollBy({ left: tr.clientWidth, behavior: 'smooth' }));
+  if (!logged) ensureTodayTip();
 }
 function tipUses(id) {   // all dates a tip was used: as Tip of the day, or marked by the editor
   const out = [];
@@ -997,6 +1000,7 @@ let SHEETHIDE = {}, shFilt = { q: '', app: '', level: '' }, shWired = false;
 const visibleSheets = () => SHEETS.filter(x => !SHEETHIDE[x.id]);
 const appFamily = a => /google|gmail/i.test(a) ? 'g' : /word|powerpoint|excel|teams|onenote|outlook/i.test(a) ? 'm' : /ai/i.test(a) ? 'ai' : 'it';
 function renderSheets() {
+  document.querySelectorAll('.help-tabs').forEach(t => { t.hidden = !canManage(); });
   const apps = [...new Set(SHEETS.map(x => x.app))];
   if (!shWired) {
     shWired = true;
