@@ -45,9 +45,7 @@ a{color:var(--blue)}
 .hero{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;padding:12px 0 28px;margin-bottom:24px;border-bottom:1px solid var(--line)}
 .hero h1{font:600 clamp(30px,3.6vw,42px)/1.12 var(--serif);color:var(--navy);margin:0 0 12px}
 .hero p{color:var(--muted);max-width:52ch;margin:0 0 16px;font-size:18px}
-.stats{display:flex;gap:28px;flex-wrap:wrap}
-.stat b{font:600 24px var(--serif);color:var(--navy);margin-right:6px}
-.stat span{font-size:14px;color:var(--muted)}
+
 .latest{display:flex;gap:20px;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:18px;text-decoration:none;align-items:center;transition:border-color .15s}
 .latest:hover{border-color:#b9c3d1}
 .latest .tag{font:600 12px var(--head);letter-spacing:.1em;text-transform:uppercase;color:var(--gold)}
@@ -425,3 +423,46 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
 .shr-note{margin:0;font-size:15px;color:var(--ink)}
 .shr-other{font-size:12.5px;color:var(--muted);margin:10px 0 0}
 .shr-foot{font-size:12.5px;color:var(--muted);margin:14px 0 0;border-top:1px solid var(--line);padding-top:10px}
+
+/* quieter figures line */
+.stats{display:flex;flex-wrap:wrap;gap:0;font-size:14px;color:var(--muted)}
+.stats span+span::before{content:"·";margin:0 8px;color:#b0b8c4}
+.stats .st-admin{color:var(--gold)}
+/* phone home screen: compact and calm */
+@media screen and (max-width:620px){
+  .view{padding:18px 16px}
+  .hero{gap:16px;padding:4px 0 20px;margin-bottom:18px}
+  .hero .eyebrow{font-size:10.5px;letter-spacing:.08em;margin-bottom:6px}
+  .hero h1{font-size:27px;margin-bottom:8px}
+  .hero p{font-size:16px;margin-bottom:10px}
+  .latest{padding:12px;gap:14px;border-radius:8px}
+  .latest .cover{width:72px}
+  .latest .tag{font-size:11px;letter-spacing:.06em}
+  .latest h2{font-size:18px;margin:3px 0}
+  .latest p{font-size:14px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .binder-promo{padding:20px 18px;gap:16px;margin-bottom:22px;grid-template-columns:84px 1fr;text-align:left}
+  .binder-promo .bp-book{width:84px;height:118px}
+  .binder-promo .bp-cover{padding:10px 6px 0 14px}.bp-spine{width:7px}.bp-crest{width:14px}
+  .binder-promo .bp-cover small{display:none}.binder-promo .bp-cover b{font-size:12px}.binder-promo .bp-cover i{font-size:7px;margin-bottom:22px}.binder-promo .bp-band{height:16px}
+  .binder-promo .eyebrow{font-size:10.5px;margin-bottom:4px}
+  .binder-promo h2{font-size:19px;margin-bottom:6px}
+  .binder-promo p{display:none}
+  .binder-promo .btn.primary{font-size:14px;padding:8px 14px}
+  .bp-count{display:block;margin:8px 0 0;font-size:13px}
+  .mast-in{padding:10px 16px}.brand .crest{width:30px}
+  .mast-nav{gap:16px}
+}
+@media screen and (max-width:620px){
+  .toolbar{gap:10px;margin-bottom:16px}
+  .toolbar input[type=search]{flex:1 1 0;min-width:0;font-size:15px;padding:8px 10px}
+  .toolbar select{flex:none;font-size:13px;padding:8px 6px}
+  .grid{grid-template-columns:1fr 1fr;gap:12px}
+  .card .meta{padding:9px 10px 11px}
+  .card h3{font-size:15px}
+  .card p{display:none}
+  .card .num{font-size:10.5px}
+  .tool{font-size:11px}.tool+.tool::before{margin:0 4px}
+  .card .quick{top:6px;right:6px;padding:3px 7px;font-size:11px}
+  .badge{top:6px;left:6px;font-size:9.5px;padding:2px 6px}
+  .binder-promo .bp-pages{transform:translate(5px,4px)}
+}

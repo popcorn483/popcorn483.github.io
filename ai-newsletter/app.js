@@ -144,7 +144,7 @@ function render() {
   if (location.hash === '#binder' && Binder.active) { Binder.refresh(); return; }
   const h = location.hash.slice(1);
   document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : h.startsWith('issue-') ? '' : 'library')));
-  $('#adminLink').textContent = ADMIN ? 'Release desk' : (innerWidth < 620 ? 'Admin' : 'Staff admin');
+  $('#adminLink').textContent = innerWidth < 620 ? 'Admin' : (ADMIN ? 'Release desk' : 'Staff admin');
   $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = true;
   document.body.classList.toggle('binder-on', h === 'binder');
   if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
@@ -193,8 +193,8 @@ function fmtDate(d) { if (!d) return ''; const x = new Date(d + 'T12:00:00'); re
 
 function renderLibrary() {
   const all = allIssues(), live = all.filter(i => status(i) === 'live'), soon = all.filter(i => status(i) !== 'live' && status(i) !== 'removed');
-  $('#stats').innerHTML = `<div class="stat"><b>${live.length}</b><span>issues to explore</span></div><div class="stat"><b>${new Set(live.map(i => i.theme)).size}</b><span>themes covered</span></div>` +
-    (canManage() ? `<div class="stat"><b>${soon.length}</b><span>locked (only you see this)</span></div>` : `<div class="stat"><b>5</b><span>minutes to read</span></div>`);
+  { const th = new Set(live.map(i => i.theme)).size;
+    $('#stats').innerHTML = `<span>${live.length} issues</span><span>${th} themes</span>` + (canManage() && soon.length ? `<span class="st-admin">${soon.length} not yet released</span>` : ''); }
   const bc = document.querySelector('.bp-crest'); if (bc && !bc.src) bc.src = window.ERGS_CREST || '';
   { const pg = live.reduce((t, i) => t + ((i.imgs || i.pageDocs || [1]).length), 0); $('#bpCount').textContent = `${live.length} issues` + (pg > live.length ? ` · ${pg} pages` : ''); }
   const L = latestIssue();
