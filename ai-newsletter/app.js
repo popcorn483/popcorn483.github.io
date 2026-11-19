@@ -518,13 +518,50 @@ $('#installBtn').addEventListener('click', async () => {
 $('#iosClose').addEventListener('click', () => { $('#iosTip').hidden = true; });
 
 /* ---------- share (same card as ERGS Live) ---------- */
-const LIB_ITEM = { label: 'AI in School', url: BASE, file: 'ai-in-school-qr', desc: 'The ERGS staff AI newsletter library. Staff need the staff password to open it.', shareText: 'AI in School: A Teacher’s Guide – the ERGS staff AI newsletter. Staff password needed.' };
-function openShare(items) { if (!window.ERGSShare) return toast('Sharing isn’t available'); window.ERGSShare.open({ title: 'Share', crest: window.ERGS_CREST, items }); }
-$('#shareBtn').addEventListener('click', () => openShare([LIB_ITEM]));
-$('#shareIssueBtn').addEventListener('click', () => {
-  const id = location.hash.slice(7), i = allIssues().find(x => x.id === id); if (!i) return openShare([LIB_ITEM]);
-  openShare([{ label: 'Issue ' + i.n, url: BASE + '#issue-' + i.id, file: 'ai-in-school-issue-' + i.n, desc: `Issue ${i.n}: ${i.title}. Opens straight onto this issue (staff password needed).`, shareText: `AI in School – Issue ${i.n}: ${i.title}` }, LIB_ITEM]);
-});
+/* simple share panel: QR code, copy address, install */
+function openShare(issue) {
+  document.querySelector('.shr-ov')?.remove();
+  const targets = [{ key: 'lib', label: 'Whole library', url: BASE }];
+  if (issue) targets.unshift({ key: 'iss', label: 'This issue', url: BASE + '#issue-' + issue.id });
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const installHTML = standalone() ? '<p class="shr-note">You’re using the installed app.</p>'
+    : deferredInstall ? '<button class="btn primary" id="shrInstall">Install on this device</button>'
+    : isIOS ? '<ol class="shr-steps"><li>Tap the <b>Share</b> button in Safari</li><li>Choose <b>Add to Home Screen</b></li></ol>'
+    : isAndroid ? '<ol class="shr-steps"><li>Open the browser menu <b>⋮</b></li><li>Choose <b>Install app</b> or <b>Add to Home screen</b></li></ol>'
+    : '<p class="shr-note">In Chrome or Edge, click the install icon at the right of the address bar.</p>';
+  const ov = document.createElement('div'); ov.className = 'shr-ov';
+  ov.innerHTML = `<div class="shr" role="dialog" aria-modal="true" aria-label="Share">
+    <div class="shr-head"><h2>Share</h2><button class="shr-x" aria-label="Close">×</button></div>
+    ${targets.length > 1 ? `<div class="seg shr-seg">${targets.map((t, k) => `<button data-k="${k}" class="${k ? '' : 'on'}">${t.label}</button>`).join('')}</div>` : ''}
+    <div class="shr-qr"></div>
+    <p class="shr-cap">Scan with a phone camera to open</p>
+    <div class="shr-copy"><input readonly aria-label="Address"><button class="btn primary" id="shrCopy">Copy</button></div>
+    <div class="shr-inst"><h3>Install the app</h3>${installHTML}
+      <p class="shr-other">${isIOS ? 'On Android: browser menu ⋮ → Install app' : isAndroid ? 'On iPhone: Safari Share → Add to Home Screen' : 'On phones – iPhone: Share → Add to Home Screen · Android: menu ⋮ → Install app'}</p></div>
+    <p class="shr-foot">Colleagues will need the staff password the first time they open it.</p>
+  </div>`;
+  document.body.appendChild(ov);
+  const set = k => {
+    const t = targets[k]; ov.querySelector('input').value = t.url;
+    const q = ov.querySelector('.shr-qr'); q.innerHTML = '';
+    try { q.appendChild(window.ERGSShare.draw(t.url, window.ERGS_CREST)); } catch (e) { q.textContent = 'QR code unavailable'; }
+    ov.querySelectorAll('.shr-seg button').forEach(b => b.classList.toggle('on', +b.dataset.k === k));
+  };
+  set(0);
+  ov.querySelectorAll('.shr-seg button').forEach(b => b.addEventListener('click', () => set(+b.dataset.k)));
+  const close = () => ov.remove();
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  ov.querySelector('.shr-x').addEventListener('click', close);
+  document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } });
+  ov.querySelector('#shrCopy').addEventListener('click', async () => {
+    const inp = ov.querySelector('input');
+    try { await navigator.clipboard.writeText(inp.value); } catch (e) { inp.select(); document.execCommand?.('copy'); }
+    const b = ov.querySelector('#shrCopy'); b.textContent = 'Copied ✓'; setTimeout(() => { b.textContent = 'Copy'; }, 1800);
+  });
+  ov.querySelector('#shrInstall')?.addEventListener('click', async () => { if (!deferredInstall) return; deferredInstall.prompt(); await deferredInstall.userChoice.catch(() => {}); deferredInstall = null; close(); });
+}
+$('#shareBtn').addEventListener('click', () => openShare(null));
+$('#shareIssueBtn').addEventListener('click', () => { const id = location.hash.slice(7); openShare(allIssues().find(x => x.id === id) || null); });
 /* ---------- automatic updates ----------
    The app fingerprints its own files. When anything is pushed to GitHub, open and installed copies
    notice within minutes (and whenever they're reopened) and refresh themselves – no version numbers to bump. */
