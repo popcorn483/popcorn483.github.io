@@ -143,12 +143,13 @@ function render() {
   if (!CONTENT) return;
   if (location.hash === '#binder' && Binder.active) { Binder.refresh(); return; }
   const h = location.hash.slice(1);
-  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : h.startsWith('issue-') ? '' : 'library')));
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : h === 'tips' ? 'tips' : h.startsWith('issue-') ? '' : 'library')));
   $('#adminLink').textContent = innerWidth < 620 ? 'Admin' : (ADMIN ? 'Release desk' : 'Staff admin');
-  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = true;
+  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = $('#tips').hidden = true;
   document.body.classList.toggle('binder-on', h === 'binder');
   if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
   else if (h === 'binder') { $('#binder').hidden = false; Binder.open(); }
+  else if (h === 'tips') { $('#tips').hidden = false; renderTips(); document.title = 'Quick tips · AI in School'; }
   else if (h.startsWith('issue-')) { $('#reader').hidden = false; renderReader(h.slice(6)); }
   else { $('#library').hidden = false; renderLibrary(); }
 }
@@ -197,6 +198,7 @@ function renderLibrary() {
     $('#stats').innerHTML = `<span>${live.length} issues</span><span>${th} themes</span>` + (canManage() && soon.length ? `<span class="st-admin">${soon.length} not yet released</span>` : ''); }
   const bc = document.querySelector('.bp-crest'); if (bc && !bc.src) bc.src = window.ERGS_CREST || '';
   { const pg = live.reduce((t, i) => t + ((i.imgs || i.pageDocs || [1]).length), 0); $('#bpCount').textContent = `${live.length} issues` + (pg > live.length ? ` · ${pg} pages` : ''); }
+  renderTipDay();
   const L = latestIssue();
   $('#latest').hidden = !L;
   if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">Latest issue · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
@@ -565,7 +567,7 @@ $('#shareIssueBtn').addEventListener('click', () => { const id = location.hash.s
 /* ---------- automatic updates ----------
    The app fingerprints its own files. When anything is pushed to GitHub, open and installed copies
    notice within minutes (and whenever they're reopened) and refresh themselves – no version numbers to bump. */
-const WATCH = ['index.html', 'app.js', 'style.css', 'config.js', 'share.js', 'content.enc'];
+const WATCH = ['index.html', 'app.js', 'style.css', 'config.js', 'share.js', 'tips.js', 'content.enc'];
 let BUILD = null, updating = false;
 async function fingerprint() {
   const bufs = await Promise.all(WATCH.map(f => fetch(f + '?v=' + Date.now(), { cache: 'no-store' }).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); })));
@@ -747,4 +749,28 @@ const Binder = (() => {
 })();
 window.addEventListener('hashchange', () => { if (location.hash !== '#binder') Binder.active = false; });
 
+/* ---------- quick tips ---------- */
+const TIPS = (window.NL_TIPS || []).map(([app, title, text, where], k) => ({ k, app, title, text, where }));
+const TIP_APPS = [...new Set(TIPS.map(t => t.app))];
+let tipFilt = { q: '', app: '' }, tipOffset = 0, tipsWired = false;
+const tipCard = t => `<article class="tip-card"><span class="tip-app" data-app="${esc(t.app)}">${esc(t.app)}</span><h3>${esc(t.title)}</h3><p>${esc(t.text)}</p>${t.where ? `<p class="tip-where">${esc(t.where)}</p>` : ''}</article>`;
+function renderTipDay() {
+  const el = $('#tipDay'); if (!el || !TIPS.length) return;
+  const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
+  const t = TIPS[((day + tipOffset) % TIPS.length + TIPS.length) % TIPS.length];
+  el.innerHTML = `<div class="td-label"><span>Tip of the day</span><b data-app="${esc(t.app)}">${esc(t.app)}</b></div>
+    <div class="td-body"><h3>${esc(t.title)}</h3><p>${esc(t.text)}</p>${t.where ? `<p class="tip-where">${esc(t.where)}</p>` : ''}</div>
+    <div class="td-acts"><button class="btn small" id="tdNext">Another tip</button><a class="btn small ghost" href="#tips">All ${TIPS.length} tips →</a></div>`;
+  $('#tdNext').onclick = () => { tipOffset++; renderTipDay(); };
+}
+function renderTips() {
+  if (!tipsWired) {
+    tipsWired = true;
+    $('#tipChips').innerHTML = ['All', ...TIP_APPS].map(a => `<button class="chip${a === 'All' ? ' on' : ''}" data-a="${esc(a === 'All' ? '' : a)}">${esc(a)}</button>`).join('');
+    $('#tipChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; tipFilt.app = b.dataset.a; $('#tipChips').querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b)); renderTips(); });
+    $('#tipQ').addEventListener('input', e => { tipFilt.q = e.target.value.toLowerCase(); renderTips(); });
+  }
+  const list = TIPS.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.text + ' ' + t.where).toLowerCase().includes(tipFilt.q)));
+  $('#tipGrid').innerHTML = list.length ? list.map(tipCard).join('') : '<p class="empty">No tips match that search.</p>';
+}
 boot();

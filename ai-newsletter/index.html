@@ -60,6 +60,7 @@
       <nav class="mast-nav">
         <a href="#" data-nav="library">Library</a>
         <a href="#binder" data-nav="binder">Binder</a>
+        <a href="#tips" data-nav="tips">Tips</a>
         <a href="#admin" data-nav="admin" id="adminLink">Release desk</a>
         <button class="linkbtn" id="installBtn" hidden>Install app</button>
         <button class="linkbtn" id="shareBtn">Share</button>
@@ -77,6 +78,8 @@
       </div>
       <a class="latest" id="latest" href="#"></a>
     </section>
+
+    <section class="tipday" id="tipDay" aria-label="Tip of the day"></section>
 
     <a class="binder-promo" href="#binder" aria-label="Open the binder">
       <div class="bp-book" aria-hidden="true">
@@ -134,6 +137,16 @@
     <p class="bk-hint">Swipe, tap the page edges or use the arrow keys to turn pages.</p>
   </main>
 
+  <main id="tips" class="view" hidden>
+    <div class="tips-head">
+      <p class="eyebrow">Quick tips</p>
+      <h1>Small things that save time</h1>
+      <p class="muted">Everyday shortcuts for Google Classroom, Gmail, Google Docs, Word, PowerPoint, Excel, Teams, OneNote, Outlook and more. No AI required.</p>
+    </div>
+    <div class="toolbar"><input type="search" id="tipQ" placeholder="Search tips, e.g. schedule, marking, shortcut"><div class="chips" id="tipChips"></div></div>
+    <div class="tipgrid" id="tipGrid"></div>
+  </main>
+
   <main id="admin" class="view" hidden>
     <div class="admin-wrap" id="adminWrap"></div>
   </main>
@@ -150,6 +163,7 @@
 <script src="config.js"></script>
 <script src="crest.js"></script>
 <script src="share.js"></script>
+<script src="tips.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -466,3 +466,30 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
   .badge{top:6px;left:6px;font-size:9.5px;padding:2px 6px}
   .binder-promo .bp-pages{transform:translate(5px,4px)}
 }
+
+/* quick tips */
+.tip-app,.td-label b{font:600 11px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+[data-app="Google Classroom"],[data-app="Gmail"],[data-app="Google Docs"],[data-app="Google Forms"],[data-app="Google Slides"]{color:#1a6b3c}
+[data-app="Word"],[data-app="PowerPoint"],[data-app="Excel"],[data-app="Teams"],[data-app="OneNote"],[data-app="Outlook"]{color:#1f4f8f}
+.tip-where{font:600 13px var(--body);color:var(--navy);background:var(--sky);border-radius:4px;padding:5px 8px;margin:8px 0 0;display:inline-block}
+.tipday{display:grid;grid-template-columns:150px 1fr auto;gap:20px;align-items:center;background:#fff;border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;padding:16px 20px;margin:0 0 26px}
+.td-label span{display:block;font:600 12px var(--body);letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:4px}
+.td-body h3{font:600 18px/1.25 var(--serif);color:var(--navy);margin:0 0 4px}
+.td-body p{margin:0;color:var(--ink);font-size:15.5px}
+.td-body .tip-where{margin-top:8px}
+.td-acts{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.tips-head{padding:6px 0 18px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tips-head h1{font:600 clamp(26px,3vw,36px)/1.15 var(--serif);color:var(--navy);margin:0 0 8px}
+.tips-head p.muted{margin:0;max-width:62ch}
+.tipgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:16px}
+.tip-card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.tip-card h3{font:600 17px/1.25 var(--serif);color:var(--navy);margin:6px 0 6px}
+.tip-card p{margin:0;font-size:15px;color:var(--ink)}
+@media screen and (max-width:760px){
+  .tipday{grid-template-columns:1fr;gap:8px;padding:14px 16px;margin-bottom:20px}
+  .td-label{display:flex;gap:10px;align-items:baseline}.td-label span{margin:0}
+  .td-acts{flex-direction:row;align-items:center}
+  .td-body h3{font-size:17px}.td-body p{font-size:15px}
+  .tipgrid{grid-template-columns:1fr;gap:10px}
+  .mast-nav{gap:13px}.mast-nav a,.linkbtn{font-size:13.5px}
+}
