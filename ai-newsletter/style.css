@@ -634,3 +634,32 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
 .foot-admin{color:#9aa4b2;font-size:12px;text-decoration:none;display:inline-block;margin-top:8px}
 .foot-admin:hover{text-decoration:underline}
 @media screen and (max-width:620px){.help-link{padding:12px 14px;margin-bottom:20px;font-size:14px}.help-link b{display:block;margin-bottom:2px}.admin-tabs a{padding:6px 10px;font-size:13px}}
+
+/* view switch (editor only) */
+.viewswitch{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:60;display:flex;background:#0b1830;border-radius:999px;padding:3px;box-shadow:0 6px 20px rgba(11,24,48,.28)}
+.viewswitch[hidden]{display:none}
+.viewswitch button{border:0;background:none;color:#aab6c8;font:600 13px var(--head);padding:7px 14px;border-radius:999px;cursor:pointer}
+.viewswitch button.on{background:#fff;color:#0b1830}
+body.is-admin .foot{padding-bottom:70px}
+body.is-admin .foot-admin{display:none}
+body.binder-on .viewswitch,body.sheet-on .viewswitch{display:none}
+@media print{.viewswitch{display:none!important}}
+/* ultra-clean staff view */
+body.clean .hero .eyebrow,body.clean .stats{display:none}
+body.clean .hero{padding-top:4px}
+body.clean .hero p{margin-bottom:0}
+body.clean .card .tools{display:none}
+body.clean .card p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media screen and (min-width:721px){
+body.clean .binder-promo{grid-template-columns:96px 1fr auto;gap:28px;padding:22px 32px}
+body.clean .binder-promo .bp-book{width:74px;height:104px}
+body.clean .binder-promo .bp-cover{padding:8px 6px 0 14px}
+body.clean .binder-promo .bp-cover small,body.clean .binder-promo .bp-cover i,body.clean .binder-promo .bp-text p,body.clean .binder-promo .eyebrow{display:none}
+body.clean .binder-promo .bp-cover b{font-size:12px;margin-top:auto;margin-bottom:22px}
+body.clean .binder-promo .bp-crest{width:14px}
+body.clean .binder-promo .bp-band{height:16px}
+body.clean .binder-promo .bp-spine{width:7px}
+body.clean .binder-promo h2{margin:0 0 4px}
+body.clean .binder-promo .bp-count{margin-left:0}
+}
+body.is-admin .toast{bottom:calc(70px + env(safe-area-inset-bottom))}

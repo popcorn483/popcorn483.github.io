@@ -38,7 +38,7 @@ function fileImg(path) {
 }
 
 /* ---------- state ---------- */
-let CONTENT = null, RELEASES = {}, CUSTOM = [], ADMIN = false, AUTHUSER = null, STAFFVIEW = false, DB = null, AUTH = null;
+let CONTENT = null, RELEASES = {}, CUSTOM = [], ADMIN = false, AUTHUSER = null, STAFFVIEW = localStorage.getItem('ergsNL.sv') === '1', DB = null, AUTH = null;
 let filt = { q: '', theme: '', tool: '' };
 
 function allIssues() {
@@ -140,14 +140,25 @@ function start() {
   window.addEventListener('hashchange', route);
   route();
 }
+function setView(staff) {
+  STAFFVIEW = staff; localStorage.setItem('ergsNL.sv', staff ? '1' : '0');
+  const h = location.hash.slice(1);
+  if (staff && (h === 'admin' || h === 'tips')) { location.hash = ''; return; }
+  render(); toast(staff ? 'Staff view – exactly what staff see' : 'Editor view');
+}
+document.addEventListener('click', e => { const b = e.target.closest('#viewSwitch button'); if (b) setView(b.dataset.v === 'staff'); });
 function route() { render(); window.scrollTo(0, 0); }
 const ADMIN_TABS = h => [['admin', 'Release desk'], ['tips', 'Tips editor'], ['help', 'Help sheets']].map(([k, l]) => `<a href="#${k}" class="${h === k ? 'on' : ''}">${l}</a>`).join('');
 function render() {
   if (!CONTENT) return;
   if (location.hash === '#binder' && Binder.active) { Binder.refresh(); return; }
   const h = location.hash.slice(1);
-  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === ((h === 'admin' || h === 'tips' || (ADMIN && h === 'help')) ? 'admin' : h === 'binder' ? 'binder' : (h === 'help' || h.startsWith('sheet-') || h.startsWith('issue-')) ? '' : 'library')));
-  $('#adminLink').hidden = !ADMIN;
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === ((h === 'admin' || h === 'tips' || (canManage() && h === 'help')) ? 'admin' : h === 'binder' ? 'binder' : (h === 'help' || h.startsWith('sheet-') || h.startsWith('issue-')) ? '' : 'library')));
+  $('#adminLink').hidden = !canManage();
+  document.body.classList.toggle('clean', !canManage());
+  document.body.classList.toggle('is-admin', ADMIN);
+  const vs = $('#viewSwitch'); vs.hidden = !ADMIN;
+  vs.querySelectorAll('button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'staff') === STAFFVIEW));
   document.querySelectorAll('.admin-tabs').forEach(t => { t.hidden = !canManage(); t.innerHTML = ADMIN_TABS(h); });
   $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = $('#tips').hidden = $('#help').hidden = $('#sheetView').hidden = true;
   document.body.classList.toggle('sheet-on', h.startsWith('sheet-'));
@@ -161,11 +172,10 @@ function render() {
   else { $('#library').hidden = false; renderLibrary(); }
 }
 function buildChips() {
-  const el = $('#themeChips');
-  el.innerHTML = ['All', ...THEMES].map(t => `<button class="chip${t === 'All' ? ' on' : ''}" data-t="${esc(t === 'All' ? '' : t)}">${esc(t)}</button>`).join('');
-  el.addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; filt.theme = b.dataset.t; el.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c === b)); renderLibrary(); });
+  const sel = $('#toolSel');
+  sel.innerHTML = '<option value="">All issues</option><optgroup label="Topic">' + THEMES.map(t => `<option value="th:${esc(t)}">${esc(t)}</option>`).join('') + '</optgroup><optgroup label="Tool">' + ['Gemini', 'Copilot', 'NotebookLM'].map(t => `<option value="tl:${t}">${t}</option>`).join('') + '</optgroup>';
   $('#q').addEventListener('input', e => { filt.q = e.target.value.toLowerCase(); renderLibrary(); });
-  $('#toolSel').addEventListener('change', e => { filt.tool = e.target.value; renderLibrary(); });
+  sel.addEventListener('change', e => { const v = e.target.value; filt.theme = v.startsWith('th:') ? v.slice(3) : ''; filt.tool = v.startsWith('tl:') ? v.slice(3) : ''; renderLibrary(); });
 }
 function miniCover(i) {
   return `<div class="mini"><div class="mh"><small>AI in School</small><b>${esc(i.title)}</b><i>${i.n}</i></div><div class="kick">${esc(i.kicker || i.theme || '')}</div><div class="mb"><div><span style="height:34px"></span><span class="y" style="height:16px"></span><span style="height:12px"></span></div><div><span class="g" style="height:26px"></span><span style="height:22px"></span></div></div></div>`;
@@ -210,13 +220,10 @@ function renderLibrary() {
   $('#latest').hidden = !L;
   if (L) { $('#latest').href = '#issue-' + L.id; $('#latest').innerHTML = `<div class="cover">${coverHTML(L)}</div><div><span class="tag">Latest issue · Issue ${L.n}</span><h2>${esc(L.title)}</h2><p>${esc(L.summary || '')}</p></div>`; hydrateImgs($('#latest')); }
   const ab = $('#adminBar');
-  ab.hidden = !ADMIN;
-  if (ADMIN) {
+  ab.hidden = !canManage();
+  if (canManage()) {
     const next = soon[0];
-    ab.innerHTML = STAFFVIEW ? `<b>Staff preview</b><span>You’re seeing exactly what staff see.</span><span class="spacer"></span><button class="btn small" id="svOff">Back to editor view</button>`
-      : `<b>Editor view</b><span>Locked issues are shown greyed out – only you can open them.</span><span class="spacer"></span>${next ? `<button class="btn small primary" id="relNext">Release next: Issue ${next.n}</button>` : ''}<button class="btn small" id="svOn">Preview as staff</button><a class="btn small" href="#admin">Release desk</a>`;
-    $('#svOff')?.addEventListener('click', () => { STAFFVIEW = false; render(); });
-    $('#svOn')?.addEventListener('click', () => { STAFFVIEW = true; render(); });
+    ab.innerHTML = `<b>Editor view</b><span>Locked issues are shown greyed out – only you can open them.</span><span class="spacer"></span>${next ? `<button class="btn small primary" id="relNext">Release next: Issue ${next.n}</button>` : ''}<a class="btn small" href="#admin">Release desk</a>`;
     $('#relNext')?.addEventListener('click', () => setRelease(next.id, { s: 'live' }, `Issue ${next.n} released`));
   }
   const liveShown = live.filter(matches).reverse(), soonShown = canManage() ? soon.filter(matches) : [];   // staff never see what's still to come

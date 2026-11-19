@@ -99,8 +99,7 @@
 
     <section class="toolbar" aria-label="Filter issues">
       <input type="search" id="q" placeholder="Search issues, e.g. quizzes, Copilot, feedback">
-      <div class="chips" id="themeChips"></div>
-      <select id="toolSel" aria-label="Filter by tool"><option value="">All tools</option><option>Gemini</option><option>Copilot</option><option>NotebookLM</option></select>
+      <select id="toolSel" aria-label="Filter issues"></select>
     </section>
     <div id="adminBar" class="adminbar" hidden></div>
     <section class="grid" id="grid"></section>
@@ -187,6 +186,7 @@
   <p>Tap the <b>Share</b> button <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v7h14v-7"/></svg> in Safari, then choose <b>Add to Home Screen</b>.</p>
   <button class="btn small" id="iosClose">Got it</button>
 </div>
+<div id="viewSwitch" class="viewswitch" role="group" aria-label="Switch view" hidden><button data-v="staff">Staff view</button><button data-v="editor">Editor view</button></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="config.js"></script>
