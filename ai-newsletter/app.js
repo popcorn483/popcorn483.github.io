@@ -104,7 +104,7 @@ async function startFirebase() {
     await loadFirebase();
     const app = initializeApp(C.firebase); DB = getFirestore(app); AUTH = getAuth(app);
   } catch (e) { console.warn(e); return; }
-  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {}, used: d.usedTips || {} }; render(); if (location.hash === '#tips') renderTips(); }, e => console.warn('state', e));
+  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {}, used: d.usedTips || {} }; SHEETHIDE = d.hiddenSheets || {}; render(); if (location.hash === '#tips') renderTips(); if (location.hash === '#help') renderSheets(); }, e => console.warn('state', e));
   onSnapshot(collection(DB, 'newsletterIssues'), async s => {
     const out = [];
     for (const d of s.docs) { try { const x = await decJSON(d.data().enc); out.push({ ...x, id: 'c' + d.id, docId: d.id }); } catch (e) {} }
@@ -145,13 +145,16 @@ function render() {
   if (!CONTENT) return;
   if (location.hash === '#binder' && Binder.active) { Binder.refresh(); return; }
   const h = location.hash.slice(1);
-  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : h === 'tips' ? 'tips' : h.startsWith('issue-') ? '' : 'library')));
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : (h === 'tips' || h === 'help' || h.startsWith('sheet-')) ? 'help' : h.startsWith('issue-') ? '' : 'library')));
   $('#adminLink').textContent = innerWidth < 620 ? 'Admin' : (ADMIN ? 'Release desk' : 'Staff admin');
-  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = $('#tips').hidden = true;
+  $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = $('#tips').hidden = $('#help').hidden = $('#sheetView').hidden = true;
+  document.body.classList.toggle('sheet-on', h.startsWith('sheet-'));
   document.body.classList.toggle('binder-on', h === 'binder');
   if (h === 'admin') { $('#admin').hidden = false; renderAdmin(); }
   else if (h === 'binder') { $('#binder').hidden = false; Binder.open(); }
   else if (h === 'tips') { $('#tips').hidden = false; renderTips(); document.title = 'Quick tips · AI in School'; }
+  else if (h === 'help') { $('#help').hidden = false; renderSheets(); document.title = 'Help sheets · AI in School'; }
+  else if (h.startsWith('sheet-')) { $('#sheetView').hidden = false; renderSheet(+h.slice(6)); }
   else if (h.startsWith('issue-')) { $('#reader').hidden = false; renderReader(h.slice(6)); }
   else { $('#library').hidden = false; renderLibrary(); }
 }
@@ -575,7 +578,7 @@ $('#shareIssueBtn').addEventListener('click', () => { const id = location.hash.s
 /* ---------- automatic updates ----------
    The app fingerprints its own files. When anything is pushed to GitHub, open and installed copies
    notice within minutes (and whenever they're reopened) and refresh themselves – no version numbers to bump. */
-const WATCH = ['index.html', 'app.js', 'style.css', 'config.js', 'share.js', 'tips.js', 'content.enc'];
+const WATCH = ['index.html', 'app.js', 'style.css', 'config.js', 'share.js', 'tips.js', 'sheets.js', 'content.enc'];
 let BUILD = null, updating = false;
 async function fingerprint() {
   const bufs = await Promise.all(WATCH.map(f => fetch(f + '?v=' + Date.now(), { cache: 'no-store' }).then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); })));
@@ -824,6 +827,7 @@ function saveTipState(patch, msg) {
   setDoc(doc(DB, 'newsletter', 'state'), { releases: {}, ...patch, updated: serverTimestamp() }, { merge: true }).then(() => msg && toast(msg)).catch(e => toast('Couldn’t save: ' + (e.code || e.message)));
 }
 function renderTips() {
+  document.querySelectorAll('[data-ht]').forEach(a => a.classList.toggle('on', '#' + a.dataset.ht === location.hash));
   const apps = [...new Set(allTips().map(t => t.app))];
   if (!tipsWired) {
     tipsWired = true;
@@ -978,5 +982,69 @@ async function downloadSeries() {
     msg.textContent = `Downloaded ${list.length} issues (${total + 2} pages).`;
   } catch (e) { console.warn(e); msg.textContent = 'Couldn’t build the PDF: ' + (e.message || e); }
   btn.disabled = false;
+}
+/* ---------- help sheets ---------- */
+const SHEETS = (window.NL_SHEETS || []).map((x, k) => ({ ...x, n: k + 1, id: slug(x.app + '-' + x.title) }));
+let SHEETHIDE = {}, shFilt = { q: '', app: '', level: '' }, shWired = false;
+const visibleSheets = () => SHEETS.filter(x => !SHEETHIDE[x.id]);
+const appFamily = a => /google|gmail/i.test(a) ? 'g' : /word|powerpoint|excel|teams|onenote|outlook/i.test(a) ? 'm' : /ai/i.test(a) ? 'ai' : 'it';
+function renderSheets() {
+  const apps = [...new Set(SHEETS.map(x => x.app))];
+  if (!shWired) {
+    shWired = true;
+    $('#shChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; shFilt.app = b.dataset.a; renderSheets(); });
+    $('#shQ').addEventListener('input', e => { shFilt.q = e.target.value.toLowerCase(); renderSheets(); });
+    $('#shLvl').addEventListener('change', e => { shFilt.level = e.target.value; renderSheets(); });
+  }
+  document.querySelectorAll('[data-ht]').forEach(a => a.classList.toggle('on', '#' + a.dataset.ht === location.hash));
+  $('#shChips').innerHTML = ['All', ...apps].map(a => { const v = a === 'All' ? '' : a; return `<button class="chip${shFilt.app === v ? ' on' : ''}" data-a="${esc(v)}">${esc(a)}</button>`; }).join('');
+  const vis = visibleSheets();
+  const list = vis.filter(x => (!shFilt.app || x.app === shFilt.app) && (!shFilt.level || x.level === shFilt.level) && (!shFilt.q || [x.app, x.title, x.intro, ...x.steps.flat()].join(' ').toLowerCase().includes(shFilt.q)));
+  $('#shCount').textContent = `${list.length} of ${vis.length} help sheets`;
+  const hidden = SHEETS.filter(x => SHEETHIDE[x.id]);
+  $('#sheetAdmin').hidden = !canManage();
+  if (canManage()) $('#sheetAdmin').innerHTML = `<div class="adminbar"><b>Editor</b><span>Hide sheets that don’t suit your staff – restore them at the bottom of the page. Staff never see these controls.</span></div>`;
+  $('#shGrid').innerHTML = (list.length ? list.map(x => `<a class="shcard fam-${appFamily(x.app)}" href="#sheet-${x.n}"><span class="shnum">Sheet ${x.n}</span><div class="tip-top"><span class="tip-app">${esc(x.app)}</span><span class="tip-lvl${x.level === 'New to this' ? ' new' : ''}">${esc(x.level)}</span></div><h3>${esc(x.title)}</h3><p>${esc(x.intro)}</p>${canManage() ? `<span class="tip-admin"><button class="btn small" data-shhide="${esc(x.id)}">Hide</button></span>` : ''}</a>`).join('') : '<p class="empty">No help sheets match that search.</p>') +
+    (canManage() && hidden.length ? `<div class="tip-hidden"><h3>Hidden help sheets (${hidden.length})</h3><p class="muted">Staff can’t see these.</p>${hidden.map(x => `<div class="th-row"><span><b>${esc(x.app)}</b> · ${esc(x.title)}</span><button class="btn small" data-shshow="${esc(x.id)}">Restore</button></div>`).join('')}</div>` : '');
+  document.querySelectorAll('[data-shhide]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); saveTipState({ hiddenSheets: { [b.dataset.shhide]: true } }, 'Help sheet hidden'); }));
+  document.querySelectorAll('[data-shshow]').forEach(b => b.addEventListener('click', () => saveTipState({ hiddenSheets: { [b.dataset.shshow]: false } }, 'Help sheet restored')));
+}
+function sheetHTML(x) {
+  return `<article class="hs fam-${appFamily(x.app)}">
+    <header class="hs-head"><div class="hs-hl"><p class="hs-kick">Staff help sheet · No. ${x.n}</p><h1>${esc(x.title)}</h1><p class="hs-tags"><span>${esc(x.app)}</span><span>${esc(x.level)}</span></p></div><img class="hs-crest" src="${window.ERGS_CREST || ''}" alt=""></header>
+    <div class="hs-body">
+      <p class="hs-intro">${esc(x.intro)}</p>
+      <div class="hs-cols">
+        <div>
+          ${x.before?.length ? `<div class="hs-before"><h4>Before you start</h4><ul>${x.before.map(b => `<li>${esc(b)}</li>`).join('')}</ul></div>` : ''}
+          <h4 class="hs-sec">Step by step</h4>
+          <ol class="hs-steps">${x.steps.map(([t, d]) => `<li><b>${esc(t)}</b><span>${esc(d)}</span></li>`).join('')}</ol>
+        </div>
+        <aside>
+          <div class="hs-tip"><h4>Top tip</h4><p>${esc(x.tip)}</p></div>
+          <div class="hs-trouble"><h4>If it doesn’t work</h4>${x.trouble.map(([p, f]) => `<p><b>${esc(p)}</b>${esc(f)}</p>`).join('')}</div>
+          <div class="hs-try"><h4>Try it now</h4><p>${esc(x.tryit)}</p></div>
+        </aside>
+      </div>
+    </div>
+    <footer class="hs-foot"><span>ERGS AI · AI in School: A Teacher’s Guide · Staff help sheets</span><span>Approved AI tools: Copilot · Gemini · NotebookLM</span></footer>
+  </article>`;
+}
+function fitSheet(el) {   // size the type so each sheet fills one A4 page without spilling over
+  const body = el.querySelector('.hs-body');
+  const over = () => el.scrollHeight > el.clientHeight + 1 || body.scrollHeight > body.clientHeight + 1;
+  let k = 1.18; el.style.setProperty('--k', k);
+  while (over() && k > 0.6) { k -= 0.02; el.style.setProperty('--k', k.toFixed(2)); }
+}
+function renderSheet(n) {
+  const vis = canManage() ? SHEETS : visibleSheets(), x = vis.find(s => s.n === n);
+  if (!x) { $('#hsWrap').innerHTML = '<p class="empty">That help sheet isn’t available.</p>'; return; }
+  $('#hsWrap').innerHTML = sheetHTML(x); document.title = `${x.title} · Help sheet`;
+  const el = $('#hsWrap .hs'); requestAnimationFrame(() => fitSheet(el)); document.fonts?.ready.then(() => fitSheet(el));
+  const i = vis.indexOf(x);
+  $('#shPrev').disabled = i <= 0; $('#shNext').disabled = i >= vis.length - 1;
+  $('#shPrev').onclick = () => { location.hash = 'sheet-' + vis[i - 1].n; };
+  $('#shNext').onclick = () => { location.hash = 'sheet-' + vis[i + 1].n; };
+  $('#shPrint').onclick = () => window.print();
 }
 boot();

@@ -61,7 +61,7 @@
       <nav class="mast-nav">
         <a href="#" data-nav="library">Library</a>
         <a href="#binder" data-nav="binder">Binder</a>
-        <a href="#tips" data-nav="tips">Tips</a>
+        <a href="#help" data-nav="help">Help</a>
         <a href="#admin" data-nav="admin" id="adminLink">Release desk</a>
         <button class="linkbtn" id="installBtn" hidden>Install app</button>
         <button class="linkbtn" id="shareBtn">Share</button>
@@ -138,7 +138,32 @@
     <p class="bk-hint">Swipe, tap the page edges or use the arrow keys to turn pages.</p>
   </main>
 
+  <main id="help" class="view" hidden>
+    <div class="help-tabs"><a href="#help" data-ht="help">Help sheets</a><a href="#tips" data-ht="tips">Quick tips</a></div>
+    <div class="tips-head">
+      <p class="eyebrow">Help sheets</p>
+      <h1>Step-by-step guides for staff</h1>
+      <p class="muted">One-page guides to AI, Google Classroom, Outlook, Office and everyday IT. Open one on screen, or print it for your desk.</p>
+    </div>
+    <div id="sheetAdmin" hidden></div>
+    <div class="toolbar"><input type="search" id="shQ" placeholder="Search help sheets, e.g. rules, rubric, Copilot"><select id="shLvl" aria-label="Level"><option value="">All levels</option><option>New to this</option><option>Next step</option></select><div class="chips" id="shChips"></div></div>
+    <p class="tip-count muted" id="shCount"></p>
+    <div class="shgrid" id="shGrid"></div>
+  </main>
+
+  <main id="sheetView" class="view" hidden>
+    <div class="readbar">
+      <a href="#help" class="btn ghost">← Help sheets</a>
+      <span class="spacer"></span>
+      <button class="btn ghost" id="shPrev">‹ Previous</button>
+      <button class="btn ghost" id="shNext">Next ›</button>
+      <button class="btn primary" id="shPrint">Print / Save PDF</button>
+    </div>
+    <div class="hs-wrap" id="hsWrap"></div>
+  </main>
+
   <main id="tips" class="view" hidden>
+    <div class="help-tabs"><a href="#help" data-ht="help">Help sheets</a><a href="#tips" data-ht="tips">Quick tips</a></div>
     <div class="tips-head">
       <p class="eyebrow">Quick tips</p>
       <h1>Small things that save time</h1>
@@ -167,6 +192,7 @@
 <script src="crest.js"></script>
 <script src="share.js"></script>
 <script src="tips.js"></script>
+<script src="sheets.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>
