@@ -606,3 +606,16 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
 .td-arrow{width:30px;height:30px;border-radius:50%;border:1px solid #cdd4de;background:#fff;color:var(--navy);font-size:18px;line-height:1;cursor:pointer}
 .td-arrow:disabled{opacity:.35;cursor:default}
 @media screen and (max-width:760px){.td-card{padding:14px 16px 4px}.td-foot{padding:4px 16px 12px}.td-nav{display:none}}
+/* Tip of the day: ERGS maroon so it stands out from the page and the navy binder panel */
+.tipday{background:#7d1e27!important;border:0!important;border-radius:10px!important;color:#fff;box-shadow:0 6px 20px rgba(125,30,39,.25);position:relative}
+.tipday::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:#d9b46a;border-radius:10px 10px 0 0}
+.tipday .td-label span{color:#f2d48f!important;font-weight:700}
+.tipday .td-label b,.tipday [data-app]{color:#f6e7e8!important;opacity:.9}
+.tipday h3{color:#fff!important;font-size:19px}
+.tipday .tip-why{color:#f3dfe0!important}
+.tipday .tip-steps{color:#fff}
+.tipday .tip-steps li::marker{color:#f2d48f}
+.tipday .td-hint{color:#efcfd2}
+.tipday .td-dots i{background:rgba(255,255,255,.35)}.tipday .td-dots i.on{background:#f2d48f}
+.tipday .td-arrow{background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
+.tipday .btn.ghost{color:#f2d48f}
