@@ -61,10 +61,9 @@
       <nav class="mast-nav">
         <a href="#" data-nav="library">Library</a>
         <a href="#binder" data-nav="binder">Binder</a>
-        <a href="#help" data-nav="help">Help</a>
-        <a href="#admin" data-nav="admin" id="adminLink">Release desk</a>
+        <a href="#admin" data-nav="admin" id="adminLink" hidden>Admin</a>
         <button class="linkbtn" id="installBtn" hidden>Install app</button>
-        <button class="linkbtn" id="shareBtn">Share</button>
+        <button class="iconbtn" id="shareBtn" aria-label="Share or install" title="Share or install"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg></button>
       </nav>
     </div>
   </header>
@@ -95,6 +94,8 @@
         <span class="bp-count" id="bpCount"></span>
       </div>
     </a>
+
+    <a class="help-link" href="#help"><span><b>Help sheets</b> Step-by-step guides to Copilot, Gemini, Google Classroom, Outlook and Office</span><span class="hl-go">Browse →</span></a>
 
     <section class="toolbar" aria-label="Filter issues">
       <input type="search" id="q" placeholder="Search issues, e.g. quizzes, Copilot, feedback">
@@ -139,7 +140,7 @@
   </main>
 
   <main id="help" class="view" hidden>
-    <div class="help-tabs" hidden><a href="#help" data-ht="help">Help sheets</a><a href="#tips" data-ht="tips">Quick tips (editor)</a></div>
+    <div class="admin-tabs" hidden></div>
     <div class="tips-head">
       <p class="eyebrow">Help sheets</p>
       <h1>Step-by-step guides for staff</h1>
@@ -163,11 +164,11 @@
   </main>
 
   <main id="tips" class="view" hidden>
-    <div class="help-tabs" hidden><a href="#help" data-ht="help">Help sheets</a><a href="#tips" data-ht="tips">Quick tips (editor)</a></div>
+    <div class="admin-tabs" hidden></div>
     <div class="tips-head">
-      <p class="eyebrow">Quick tips</p>
-      <h1>Small things that save time</h1>
-      <p class="muted">Every tip that has featured as Tip of the day, kept here for you to come back to. Look for <b class="tip-lvl new">New to this</b> if you’re just starting, or <b class="tip-lvl">Next step</b> when you’re ready for more.</p>
+      <p class="eyebrow">Admin</p>
+      <h1>Tips editor</h1>
+      <p class="muted">Every tip in the collection. Staff only see a tip on the home screen once it has had its day as Tip of the day. Choose today’s tip, mark tips you’ve shared, hide or add tips.</p>
     </div>
     <div id="tipAdmin" hidden></div>
     <div class="toolbar"><input type="search" id="tipQ" placeholder="Search tips, e.g. rules, marking, schedule"><select id="tipLvl" aria-label="Level"><option value="">All levels</option><option>New to this</option><option>Next step</option></select><div class="chips" id="tipChips"></div></div>
@@ -179,7 +180,7 @@
     <div class="admin-wrap" id="adminWrap"></div>
   </main>
 
-  <footer class="foot">ERGS · AI in School: A Teacher's Guide · For staff use only. Never enter pupil names or personal data into AI tools.</footer>
+  <footer class="foot">ERGS · AI in School: A Teacher's Guide · For staff use only. Never enter pupil names or personal data into AI tools.<br><a href="#admin" class="foot-admin">Staff admin</a></footer>
 </div>
 <div id="iosTip" class="iostip" hidden role="dialog" aria-label="Install on iPhone">
   <b>Install AI in School</b>

@@ -141,12 +141,14 @@ function start() {
   route();
 }
 function route() { render(); window.scrollTo(0, 0); }
+const ADMIN_TABS = h => [['admin', 'Release desk'], ['tips', 'Tips editor'], ['help', 'Help sheets']].map(([k, l]) => `<a href="#${k}" class="${h === k ? 'on' : ''}">${l}</a>`).join('');
 function render() {
   if (!CONTENT) return;
   if (location.hash === '#binder' && Binder.active) { Binder.refresh(); return; }
   const h = location.hash.slice(1);
-  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === (h === 'admin' ? 'admin' : h === 'binder' ? 'binder' : (h === 'tips' || h === 'help' || h.startsWith('sheet-')) ? 'help' : h.startsWith('issue-') ? '' : 'library')));
-  $('#adminLink').textContent = innerWidth < 620 ? 'Admin' : (ADMIN ? 'Release desk' : 'Staff admin');
+  document.querySelectorAll('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === ((h === 'admin' || h === 'tips' || (ADMIN && h === 'help')) ? 'admin' : h === 'binder' ? 'binder' : (h === 'help' || h.startsWith('sheet-') || h.startsWith('issue-')) ? '' : 'library')));
+  $('#adminLink').hidden = !ADMIN;
+  document.querySelectorAll('.admin-tabs').forEach(t => { t.hidden = !canManage(); t.innerHTML = ADMIN_TABS(h); });
   $('#library').hidden = $('#reader').hidden = $('#admin').hidden = $('#binder').hidden = $('#tips').hidden = $('#help').hidden = $('#sheetView').hidden = true;
   document.body.classList.toggle('sheet-on', h.startsWith('sheet-'));
   document.body.classList.toggle('binder-on', h === 'binder');
@@ -356,7 +358,7 @@ function renderAdmin() {
   const e = editing || {};
   const val = (k, d = '') => esc(e[k] ?? d);
   const lines = k => esc((e[k] || []).join('\n'));
-  w.innerHTML = `
+  w.innerHTML = `<div class="admin-tabs">${ADMIN_TABS('admin')}</div>
   <div class="panel"><div class="row"><h2 style="margin:0">Release desk</h2><span class="spacer"></span><small class="muted">Signed in as ${esc(AUTHUSER.email)}</small><button class="btn small" id="so">Sign out</button></div>
     <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only ever see released issues – nothing about what’s still to come.</p>
     <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Upload a new issue</button></div>
@@ -520,9 +522,8 @@ const standalone = () => matchMedia('(display-mode: standalone)').matches || nav
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let deferredInstall = null;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; if (!standalone()) $('#installBtn').hidden = false; });
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });   // install is offered in the share panel
 window.addEventListener('appinstalled', () => { $('#installBtn').hidden = true; toast('Installed – find AI in School on your home screen'); });
-if (isIOS && !standalone()) $('#installBtn').hidden = false;
 $('#installBtn').addEventListener('click', async () => {
   if (deferredInstall) { deferredInstall.prompt(); await deferredInstall.userChoice.catch(() => {}); deferredInstall = null; $('#installBtn').hidden = true; }
   else if (isIOS) $('#iosTip').hidden = false;
@@ -837,7 +838,6 @@ function saveTipState(patch, msg) {
   setDoc(doc(DB, 'newsletter', 'state'), { releases: {}, ...patch, updated: serverTimestamp() }, { merge: true }).then(() => msg && toast(msg)).catch(e => toast('Couldn’t save: ' + (e.code || e.message)));
 }
 function renderTips() {
-  document.querySelectorAll('[data-ht]').forEach(a => a.classList.toggle('on', '#' + a.dataset.ht === location.hash));
   const apps = [...new Set((canManage() ? allTips() : releasedTips()).map(t => t.app))];
   if (!tipsWired) {
     tipsWired = true;
@@ -1008,7 +1008,6 @@ let SHEETHIDE = {}, shFilt = { q: '', app: '', level: '' }, shWired = false;
 const visibleSheets = () => SHEETS.filter(x => !SHEETHIDE[x.id]);
 const appFamily = a => /google|gmail/i.test(a) ? 'g' : /word|powerpoint|excel|teams|onenote|outlook/i.test(a) ? 'm' : /ai/i.test(a) ? 'ai' : 'it';
 function renderSheets() {
-  document.querySelectorAll('.help-tabs').forEach(t => { t.hidden = !canManage(); });
   const apps = [...new Set(SHEETS.map(x => x.app))];
   if (!shWired) {
     shWired = true;
@@ -1016,7 +1015,6 @@ function renderSheets() {
     $('#shQ').addEventListener('input', e => { shFilt.q = e.target.value.toLowerCase(); renderSheets(); });
     $('#shLvl').addEventListener('change', e => { shFilt.level = e.target.value; renderSheets(); });
   }
-  document.querySelectorAll('[data-ht]').forEach(a => a.classList.toggle('on', '#' + a.dataset.ht === location.hash));
   $('#shChips').innerHTML = ['All', ...apps].map(a => { const v = a === 'All' ? '' : a; return `<button class="chip${shFilt.app === v ? ' on' : ''}" data-a="${esc(v)}">${esc(a)}</button>`; }).join('');
   const vis = visibleSheets();
   const list = vis.filter(x => (!shFilt.app || x.app === shFilt.app) && (!shFilt.level || x.level === shFilt.level) && (!shFilt.q || [x.app, x.title, x.intro, ...x.steps.flat()].join(' ').toLowerCase().includes(shFilt.q)));

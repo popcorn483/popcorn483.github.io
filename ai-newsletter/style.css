@@ -204,7 +204,7 @@ table.rel select,table.rel input[type=date]{font:inherit;font-size:14px;padding:
 @media screen and (max-width:620px){.mast-nav{gap:10px}.mast-nav a,.linkbtn{font-size:14px}.brand span{display:none}}
 .mast-nav a,.linkbtn{white-space:nowrap}
 @media screen and (max-width:620px){
-  .mast-nav [data-nav="library"]{display:none}
+
   .stats{gap:16px}.stat b{font-size:20px}
   .latest .cover{width:96px}.latest h2{font-size:18px}
   .readbar .btn{padding:8px 12px;font-size:13px}
@@ -620,3 +620,17 @@ td.acts{white-space:nowrap}td.acts .btn{margin:2px 0}
 .tipday .td-arrow{background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
 .tipday .btn.ghost{color:#f2d48f}
 .tip-today{font:600 12px var(--body);color:#7d1e27;background:#fbecee;border-radius:4px;padding:4px 8px}
+
+/* discreet share icon, admin tabs, help link */
+.iconbtn{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--muted);display:grid;place-items:center;cursor:pointer;padding:0}
+.iconbtn:hover{color:var(--navy);border-color:#b9c3d1}
+.admin-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 20px;padding:4px;background:#14284b;border-radius:8px;width:fit-content}
+.admin-tabs a{font:600 14px var(--body);color:#cdd6e4;text-decoration:none;padding:7px 14px;border-radius:6px}
+.admin-tabs a.on,.admin-tabs a:hover{background:#fff;color:#14284b}
+.help-link{display:flex;justify-content:space-between;align-items:center;gap:16px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin:0 0 26px;text-decoration:none;color:var(--muted);font-size:15px}
+.help-link b{color:var(--navy);font:600 17px var(--serif);margin-right:8px}
+.help-link:hover{border-color:#b9c3d1}
+.hl-go{font:600 14px var(--body);color:var(--navy);white-space:nowrap}
+.foot-admin{color:#9aa4b2;font-size:12px;text-decoration:none;display:inline-block;margin-top:8px}
+.foot-admin:hover{text-decoration:underline}
+@media screen and (max-width:620px){.help-link{padding:12px 14px;margin-bottom:20px;font-size:14px}.help-link b{display:block;margin-bottom:2px}.admin-tabs a{padding:6px 10px;font-size:13px}}
