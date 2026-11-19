@@ -795,6 +795,8 @@ async function ensureTodayTip() {
   catch (e) { try { const s = await getDoc(doc(DB, 'newsletterTipLog', day)); if (s.exists()) TIPLOG[day] = s.data().id; } catch (e2) {} }   // another device logged today's tip first
   tipDayBusy = false; renderTipDay();
 }
+// staff only see tips that have already had their day (Tip of the day, or marked as used) before today
+const releasedTips = () => visibleTips().filter(t => tipUses(t.id).some(u => u.day < todayKey()));
 function renderTipDay() {
   const el = $('#tipDay'); if (!el) return;
   const vis = visibleTips(); if (!vis.length) { el.hidden = true; return; } el.hidden = false;
@@ -804,11 +806,16 @@ function renderTipDay() {
     const beg = vis.filter(x => x.level === 'New to this'), pool = beg.length ? beg : vis;
     t = TIPLOG ? chooseTip(vis) : pool[Math.floor(Date.now() / 864e5) % pool.length];
   }
-  if (tipOffset) { const i = vis.indexOf(t); t = vis[(i + tipOffset) % vis.length]; }
-  el.innerHTML = `<div class="td-label"><span>Tip of the day</span><b data-app="${esc(t.app)}">${esc(t.app)}</b></div>
+  // "Another tip" only moves through tips staff have already had (never ahead of the daily release)
+  const past = (canManage() ? vis : releasedTips()).filter(x => x.id !== t.id);
+  const today = t;
+  if (tipOffset && past.length) t = past[(tipOffset - 1) % past.length];
+  const label = t === today ? 'Tip of the day' : 'From an earlier day';
+  el.innerHTML = `<div class="td-label"><span>${label}</span><b data-app="${esc(t.app)}">${esc(t.app)}</b></div>
     <div class="td-body"><h3>${esc(t.title)}</h3>${tipBody(t)}</div>
-    <div class="td-acts"><button class="btn small" id="tdNext">Another tip</button><a class="btn small ghost" href="#tips">All ${vis.length} tips →</a></div>`;
-  $('#tdNext').onclick = () => { tipOffset++; renderTipDay(); };
+    <div class="td-acts">${past.length ? `<button class="btn small" id="tdNext">${tipOffset ? 'Another earlier tip' : 'Earlier tips'}</button>` : ''}${t !== today ? '<button class="btn small ghost" id="tdToday">Back to today’s tip</button>' : ''}${past.length ? `<a class="btn small ghost" href="#tips">All ${canManage() ? vis.length : past.length} tips →</a>` : ''}</div>`;
+  if ($('#tdNext')) $('#tdNext').onclick = () => { tipOffset++; renderTipDay(); };
+  if ($('#tdToday')) $('#tdToday').onclick = () => { tipOffset = 0; renderTipDay(); };
   if (!logged && !tipOffset) ensureTodayTip();
 }
 function tipUses(id) {   // all dates a tip was used: as Tip of the day, or marked by the editor
@@ -828,7 +835,7 @@ function saveTipState(patch, msg) {
 }
 function renderTips() {
   document.querySelectorAll('[data-ht]').forEach(a => a.classList.toggle('on', '#' + a.dataset.ht === location.hash));
-  const apps = [...new Set(allTips().map(t => t.app))];
+  const apps = [...new Set((canManage() ? allTips() : releasedTips()).map(t => t.app))];
   if (!tipsWired) {
     tipsWired = true;
     $('#tipChips').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; tipFilt.app = b.dataset.a; renderTips(); });
@@ -836,7 +843,7 @@ function renderTips() {
     $('#tipLvl').addEventListener('change', e => { tipFilt.level = e.target.value; renderTips(); });
   }
   $('#tipChips').innerHTML = ['All', ...apps].map(a => { const v = a === 'All' ? '' : a; return `<button class="chip${tipFilt.app === v ? ' on' : ''}" data-a="${esc(v)}">${esc(a)}</button>`; }).join('');
-  const vis = visibleTips();
+  const vis = canManage() ? visibleTips() : releasedTips();
   const list = vis.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.level || t.level === tipFilt.level) && (!tipFilt.used || !canManage() || (tipFilt.used === 'used') === (tipUses(t.id).length > 0)) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.why + ' ' + t.steps.join(' ')).toLowerCase().includes(tipFilt.q)));
   $('#tipCount').textContent = `${list.length} of ${vis.length} tips`;
   // editor tools
@@ -847,7 +854,7 @@ function renderTips() {
     const marked = []; Object.entries(TIPSTATE.used).forEach(([id, days]) => (days || []).forEach(d => marked.push([d, id])));
     const usedIds = new Set([...hist.map(h => h[1]), ...marked.map(m => m[1])]);
     const tipTitle = id => { const t = allTips().find(x => x.id === id); return t ? `<b>${esc(t.app)}</b> · ${esc(t.title)}` : '<span class="muted">(tip removed)</span>'; };
-    ab.innerHTML = `<div class="adminbar"><b>Editor</b><span>Hide tips that don’t suit your staff, mark tips you’ve shared, or add your own. Staff never see these controls.</span><span class="spacer"></span>
+    ab.innerHTML = `<div class="adminbar"><b>Editor</b><span>Staff see ${releasedTips().length} of ${visibleTips().length} tips – each one appears for them after its day as Tip of the day (or after you mark it as used). Hide, mark or add tips here.</span><span class="spacer"></span>
         <select id="tipUsedSel" aria-label="Usage"><option value="">All tips</option><option value="unused"${tipFilt.used === 'unused' ? ' selected' : ''}>Not used yet</option><option value="used"${tipFilt.used === 'used' ? ' selected' : ''}>Already used</option></select>
         <button class="btn small primary" id="tipAddBtn">${tipFormOpen ? 'Close' : '+ Add a tip'}</button></div>
       <details class="panel tip-history"><summary><b>Usage history</b> <span class="muted">· ${usedIds.size} of ${vis.length} tips used · ${hist.length} tips of the day logged</span></summary>
@@ -869,7 +876,8 @@ function renderTips() {
       tipFormOpen = false; saveTipState({ customTips: { [id]: t } }, 'Tip added');
     });
   }
-  $('#tipGrid').innerHTML = (list.length ? list.map(tipCard).join('') : '<p class="empty">No tips match that search.</p>') +
+  const emptyMsg = !vis.length ? '<p class="empty">A new tip appears on the home page each day. Once a tip has had its day, it’s kept here for you to come back to.</p>' : '<p class="empty">No tips match that search.</p>';
+  $('#tipGrid').innerHTML = (list.length ? list.map(tipCard).join('') : emptyMsg) +
     (canManage() && hidden.length ? `<div class="tip-hidden"><h3>Hidden tips (${hidden.length})</h3><p class="muted">Staff can’t see these.</p>${hidden.map(t => `<div class="th-row"><span><b>${esc(t.app)}</b> · ${esc(t.title)}</span><button class="btn small" data-tipshow="${esc(t.id)}">Restore</button></div>`).join('')}</div>` : '');
   document.querySelectorAll('[data-tiphide]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.tiphide, t = allTips().find(x => x.id === id);
