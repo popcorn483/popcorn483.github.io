@@ -104,7 +104,7 @@ async function startFirebase() {
     await loadFirebase();
     const app = initializeApp(C.firebase); DB = getFirestore(app); AUTH = getAuth(app);
   } catch (e) { console.warn(e); return; }
-  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {} }; render(); if (location.hash === '#tips') renderTips(); }, e => console.warn('state', e));
+  onSnapshot(doc(DB, 'newsletter', 'state'), s => { const d = (s.exists() && s.data()) || {}; RELEASES = d.releases || {}; TIPSTATE = { hidden: d.hiddenTips || {}, custom: d.customTips || {}, used: d.usedTips || {} }; render(); if (location.hash === '#tips') renderTips(); }, e => console.warn('state', e));
   onSnapshot(collection(DB, 'newsletterIssues'), async s => {
     const out = [];
     for (const d of s.docs) { try { const x = await decJSON(d.data().enc); out.push({ ...x, id: 'c' + d.id, docId: d.id }); } catch (e) {} }
@@ -117,6 +117,7 @@ async function startFirebase() {
   });
   completeLink();
   trackVisit();
+  loadTipLog().then(() => { renderTipDay(); if (location.hash === '#tips') renderTips(); });
 }
 let LINK_MSG = '';
 async function completeLink(emailTyped) {
@@ -755,22 +756,64 @@ window.addEventListener('hashchange', () => { if (location.hash !== '#binder') B
 /* ---------- quick tips ---------- */
 const slug = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
 const BUILTIN_TIPS = (window.NL_TIPS || []).map(([app, level, title, why, steps]) => ({ id: slug(app + '-' + title), app, level, title, why, steps: (steps || []).filter(Boolean) }));
-let TIPSTATE = { hidden: {}, custom: {} };
+let TIPSTATE = { hidden: {}, custom: {}, used: {} };
+let TIPLOG = null;   // { 'YYYY-MM-DD': tipId } – every Tip of the day, logged once per day
 const allTips = () => [...BUILTIN_TIPS, ...Object.entries(TIPSTATE.custom).filter(([, t]) => t && t.title).map(([id, t]) => ({ id, custom: true, app: t.app, level: t.level, title: t.title, why: t.why || '', steps: (t.steps || []).filter(Boolean) }))];
 const visibleTips = () => allTips().filter(t => !TIPSTATE.hidden[t.id]);
-let tipFilt = { q: '', app: '', level: '' }, tipOffset = 0, tipsWired = false, tipFormOpen = false;
+let tipFilt = { q: '', app: '', level: '', used: '' }, tipOffset = 0, tipsWired = false, tipFormOpen = false;
 const tipBody = t => `<p class="tip-why">${esc(t.why)}</p>${t.steps.length ? `<ol class="tip-steps">${t.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : ''}`;
-const tipCard = t => `<article class="tip-card"><div class="tip-top"><span class="tip-app" data-app="${esc(t.app)}">${esc(t.app)}</span><span class="tip-lvl${t.level === 'New to this' ? ' new' : ''}">${esc(t.level)}</span></div><h3>${esc(t.title)}</h3>${tipBody(t)}${canManage() ? `<div class="tip-admin">${t.custom ? '<span class="muted">Added by you</span>' : ''}<button class="btn small" data-tiphide="${esc(t.id)}">Hide</button></div>` : ''}</article>`;
+const tipCard = t => `<article class="tip-card"><div class="tip-top"><span class="tip-app" data-app="${esc(t.app)}">${esc(t.app)}</span><span class="tip-lvl${t.level === 'New to this' ? ' new' : ''}">${esc(t.level)}</span></div><h3>${esc(t.title)}</h3>${tipBody(t)}${canManage() ? tipAdminHTML(t) : ''}</article>`;
+const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const fmtDay = k => new Date(k + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+async function loadTipLog() {
+  try { const snap = await getDocs(collection(DB, 'newsletterTipLog')); const m = {}; snap.docs.forEach(d => { if (d.data().id) m[d.id] = d.data().id; }); TIPLOG = m; }
+  catch (e) { console.warn('tiplog', e.code || e); TIPLOG = TIPLOG || {}; }
+}
+// pick today's tip: the next beginner-friendly tip that has never been Tip of the day (oldest-used first once all have had a turn)
+function chooseTip(vis) {
+  const beg = vis.filter(t => t.level === 'New to this'), pool = beg.length ? beg : vis;
+  const lastUsed = {}; Object.entries(TIPLOG || {}).forEach(([day, id]) => { if (!lastUsed[id] || day > lastUsed[id]) lastUsed[id] = day; });
+  const fresh = pool.filter(t => !lastUsed[t.id]);
+  if (fresh.length) return fresh[0];
+  return [...pool].sort((a, b) => (lastUsed[a.id] || '').localeCompare(lastUsed[b.id] || ''))[0];
+}
+let tipDayBusy = false;
+async function ensureTodayTip() {
+  if (tipDayBusy || !DB || TIPLOG === null) return;
+  const day = todayKey(), vis = visibleTips();
+  if (TIPLOG[day] && vis.some(t => t.id === TIPLOG[day])) return;
+  const pick = chooseTip(vis); if (!pick) return;
+  tipDayBusy = true;
+  try { await setDoc(doc(DB, 'newsletterTipLog', day), { id: pick.id, at: serverTimestamp(), t: await visitToken() }); TIPLOG[day] = pick.id; }
+  catch (e) { try { const s = await getDoc(doc(DB, 'newsletterTipLog', day)); if (s.exists()) TIPLOG[day] = s.data().id; } catch (e2) {} }   // another device logged today's tip first
+  tipDayBusy = false; renderTipDay();
+}
 function renderTipDay() {
   const el = $('#tipDay'); if (!el) return;
   const vis = visibleTips(); if (!vis.length) { el.hidden = true; return; } el.hidden = false;
-  const beg = vis.filter(t => t.level === 'New to this'), pool = beg.length ? beg : vis;   // the daily tip is a beginner-friendly one
-  const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 6e4) / 864e5);
-  const t = pool[((day + tipOffset) % pool.length + pool.length) % pool.length];
+  let t = null; const logged = TIPLOG && TIPLOG[todayKey()];
+  if (logged) t = vis.find(x => x.id === logged);
+  if (!t) {   // until today's tip is logged, use a stable choice for the day
+    const beg = vis.filter(x => x.level === 'New to this'), pool = beg.length ? beg : vis;
+    t = TIPLOG ? chooseTip(vis) : pool[Math.floor(Date.now() / 864e5) % pool.length];
+  }
+  if (tipOffset) { const i = vis.indexOf(t); t = vis[(i + tipOffset) % vis.length]; }
   el.innerHTML = `<div class="td-label"><span>Tip of the day</span><b data-app="${esc(t.app)}">${esc(t.app)}</b></div>
     <div class="td-body"><h3>${esc(t.title)}</h3>${tipBody(t)}</div>
     <div class="td-acts"><button class="btn small" id="tdNext">Another tip</button><a class="btn small ghost" href="#tips">All ${vis.length} tips →</a></div>`;
   $('#tdNext').onclick = () => { tipOffset++; renderTipDay(); };
+  if (!logged && !tipOffset) ensureTodayTip();
+}
+function tipUses(id) {   // all dates a tip was used: as Tip of the day, or marked by the editor
+  const out = [];
+  Object.entries(TIPLOG || {}).forEach(([day, tid]) => { if (tid === id) out.push({ day, how: 'Tip of the day' }); });
+  (TIPSTATE.used[id] || []).forEach(day => out.push({ day, how: 'Marked as used' }));
+  return out.sort((a, b) => b.day.localeCompare(a.day));
+}
+function tipAdminHTML(t) {
+  const uses = tipUses(t.id);
+  const usedLine = uses.length ? `<div class="tip-used"><b>Used ${uses.length}×</b> · ${uses.slice(0, 3).map(u => `${fmtDay(u.day)} <span>(${u.how === 'Tip of the day' ? 'tip of the day' : 'marked'})</span>`).join(', ')}${uses.length > 3 ? '…' : ''}</div>` : '<div class="tip-used none">Not used yet</div>';
+  return `${usedLine}<div class="tip-admin">${t.custom ? '<span class="muted">Added by you</span>' : ''}<button class="btn small" data-tipused="${esc(t.id)}">Mark as used today</button><button class="btn small" data-tiphide="${esc(t.id)}">Hide</button></div>`;
 }
 function saveTipState(patch, msg) {
   if (!ADMIN || !DB) return toast('Sign in at Staff admin to change tips');
@@ -786,13 +829,22 @@ function renderTips() {
   }
   $('#tipChips').innerHTML = ['All', ...apps].map(a => { const v = a === 'All' ? '' : a; return `<button class="chip${tipFilt.app === v ? ' on' : ''}" data-a="${esc(v)}">${esc(a)}</button>`; }).join('');
   const vis = visibleTips();
-  const list = vis.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.level || t.level === tipFilt.level) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.why + ' ' + t.steps.join(' ')).toLowerCase().includes(tipFilt.q)));
+  const list = vis.filter(t => (!tipFilt.app || t.app === tipFilt.app) && (!tipFilt.level || t.level === tipFilt.level) && (!tipFilt.used || !canManage() || (tipFilt.used === 'used') === (tipUses(t.id).length > 0)) && (!tipFilt.q || (t.app + ' ' + t.title + ' ' + t.why + ' ' + t.steps.join(' ')).toLowerCase().includes(tipFilt.q)));
   $('#tipCount').textContent = `${list.length} of ${vis.length} tips`;
   // editor tools
   const hidden = allTips().filter(t => TIPSTATE.hidden[t.id]);
   const ab = $('#tipAdmin'); ab.hidden = !canManage();
   if (canManage()) {
-    ab.innerHTML = `<div class="adminbar"><b>Editor</b><span>Hide tips that don’t suit your staff, or add your own. Staff never see these controls.</span><span class="spacer"></span><button class="btn small primary" id="tipAddBtn">${tipFormOpen ? 'Close' : '+ Add a tip'}</button></div>
+    const hist = Object.entries(TIPLOG || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    const marked = []; Object.entries(TIPSTATE.used).forEach(([id, days]) => (days || []).forEach(d => marked.push([d, id])));
+    const usedIds = new Set([...hist.map(h => h[1]), ...marked.map(m => m[1])]);
+    const tipTitle = id => { const t = allTips().find(x => x.id === id); return t ? `<b>${esc(t.app)}</b> · ${esc(t.title)}` : '<span class="muted">(tip removed)</span>'; };
+    ab.innerHTML = `<div class="adminbar"><b>Editor</b><span>Hide tips that don’t suit your staff, mark tips you’ve shared, or add your own. Staff never see these controls.</span><span class="spacer"></span>
+        <select id="tipUsedSel" aria-label="Usage"><option value="">All tips</option><option value="unused"${tipFilt.used === 'unused' ? ' selected' : ''}>Not used yet</option><option value="used"${tipFilt.used === 'used' ? ' selected' : ''}>Already used</option></select>
+        <button class="btn small primary" id="tipAddBtn">${tipFormOpen ? 'Close' : '+ Add a tip'}</button></div>
+      <details class="panel tip-history"><summary><b>Usage history</b> <span class="muted">· ${usedIds.size} of ${vis.length} tips used · ${hist.length} tips of the day logged</span></summary>
+        ${[...hist.map(([d, id]) => [d, id, 'Tip of the day']), ...marked.map(([d, id]) => [d, id, 'Marked as used'])].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 120).map(([d, id, how]) => `<div class="th-row"><span class="th-date">${fmtDay(d)}</span><span class="th-tip">${tipTitle(id)}</span><span class="th-how">${how}</span></div>`).join('') || '<p class="muted">Nothing used yet – today’s Tip of the day is logged as soon as anyone opens the home page.</p>'}
+      </details>
       ${tipFormOpen ? `<form class="panel tipform" id="tipForm">
         <div class="row"><div class="field"><label>App</label><input name="app" list="tipApps" required placeholder="e.g. Google Classroom"><datalist id="tipApps">${apps.map(a => `<option value="${esc(a)}">`).join('')}</datalist></div>
         <div class="field" style="flex:0 1 180px"><label>Level</label><select name="level"><option>New to this</option><option>Next step</option></select></div></div>
@@ -801,6 +853,7 @@ function renderTips() {
         <div class="field"><label>Steps (one per line)</label><textarea name="steps" rows="4" maxlength="800"></textarea></div>
         <button class="btn primary" type="submit">Save tip</button></form>` : ''}`;
     $('#tipAddBtn').onclick = () => { tipFormOpen = !tipFormOpen; renderTips(); };
+    $('#tipUsedSel').onchange = e => { tipFilt.used = e.target.value; renderTips(); };
     $('#tipForm')?.addEventListener('submit', e => {
       e.preventDefault(); const f = new FormData(e.target), g = k => (f.get(k) || '').toString().trim();
       const t = { app: g('app'), level: g('level'), title: g('title'), why: g('why'), steps: g('steps').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 8) };
@@ -814,6 +867,10 @@ function renderTips() {
     const id = b.dataset.tiphide, t = allTips().find(x => x.id === id);
     if (t && t.custom) saveTipState({ customTips: { [id]: null } }, 'Tip removed');
     else saveTipState({ hiddenTips: { [id]: true } }, 'Tip hidden – restore it at the bottom of the page');
+  }));
+  document.querySelectorAll('[data-tipused]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.tipused, days = [...new Set([...(TIPSTATE.used[id] || []), todayKey()])];
+    saveTipState({ usedTips: { [id]: days } }, 'Marked as used today');
   }));
   document.querySelectorAll('[data-tipshow]').forEach(b => b.addEventListener('click', () => saveTipState({ hiddenTips: { [b.dataset.tipshow]: false } }, 'Tip restored')));
 }
