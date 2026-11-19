@@ -358,6 +358,9 @@ function renderAdmin() {
     <p class="muted">Released issues appear for all staff straight away. Scheduled issues appear automatically on their date. Staff only ever see released issues – nothing about what’s still to come.</p>
     <div class="row"><button class="btn primary" id="relNext2">Release the next issue</button><a class="btn" href="#">View library</a><button class="btn" id="addBtn">+ Upload a new issue</button></div>
   </div>
+  <div class="panel"><h2>Download the series</h2><p class="muted">One PDF with a cover page and every issue in order – ready to print, archive or share.</p>
+    <div class="row"><select id="dlWhich"><option value="released">Released issues only</option><option value="all">All issues (including locked)</option></select><button class="btn primary" id="dlBtn">Download PDF</button><span id="dlMsg" class="muted"></span></div>
+  </div>
   <div class="panel" id="usagePanel"><h2>Staff usage</h2><p class="muted">Loading…</p></div>
   <div class="panel" id="formPanel"${editing || formKind === 'open' ? '' : ' hidden'}>
     <h2>${editing && (editing.docId || editing.baseId) ? 'Edit issue ' + esc(editing.n) : 'Upload a new issue'}</h2>
@@ -406,6 +409,7 @@ function renderAdmin() {
 }
 function wireAdmin(all) {
   $('#so').addEventListener('click', () => signOut(AUTH));
+  $('#dlBtn').addEventListener('click', downloadSeries);
   $('#relNext2').addEventListener('click', () => { const n = all.find(i => status(i) !== 'live' && status(i) !== 'removed'); if (n) setRelease(n.id, { s: 'live' }, `Issue ${n.n} released`); else toast('Everything is already released'); });
   $('#addBtn').addEventListener('click', () => { editing = { kind: 'img' }; formKind = 'img'; pendingPages = pendingThumb = null; renderAdmin(); $('#formPanel').scrollIntoView({ behavior: 'smooth' }); });
   document.querySelectorAll('[data-s]').forEach(s => s.addEventListener('change', () => {
@@ -920,5 +924,59 @@ async function renderUsage() {
       ? `<h2>Staff usage</h2><p class="note">Usage counting needs a one-off Firebase rules update. Add the <b>newsletterVisits</b> block from <code>firestore-rules-snippet.txt</code> to your Firestore rules – counting starts as soon as it’s published.</p>`
       : `<h2>Staff usage</h2><p class="muted">Couldn’t load usage figures (${esc(e.code || e.message)}).</p>`;
   }
+}
+/* ---------- download the whole series as one PDF (editor) ---------- */
+async function loadJsPDF() {
+  if (window.jspdf) return window.jspdf;
+  await new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); });
+  return window.jspdf;
+}
+const blobURLtoDataURL = u => fetch(u).then(r => r.blob()).then(b => new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }));
+const imgSize = u => new Promise(r => { const im = new Image(); im.onload = () => r([im.naturalWidth, im.naturalHeight]); im.onerror = () => r([1240, 1754]); im.src = u; });
+async function downloadSeries() {
+  const btn = $('#dlBtn'), msg = $('#dlMsg'), which = $('#dlWhich').value;
+  const list = allIssues().filter(i => which === 'all' ? status(i) !== 'removed' : status(i) === 'live').filter(i => (i.imgs || i.pageDocs || []).length);
+  if (!list.length) return msg.textContent = 'No issues to include.';
+  btn.disabled = true;
+  try {
+    msg.textContent = 'Preparing…';
+    const { jsPDF } = await loadJsPDF();
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    // cover page
+    pdf.setFillColor(20, 40, 75); pdf.rect(0, 0, 210, 297, 'F');
+    pdf.setFillColor(184, 149, 90); pdf.rect(0, 0, 210, 2, 'F');
+    try { const cr = await new Promise((ok, no) => { const im = new Image(); im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); ok([c.toDataURL('image/png'), im.naturalWidth, im.naturalHeight]); }; im.onerror = no; im.src = window.ERGS_CREST; });
+      const ch = 44, cw = ch * cr[1] / cr[2]; pdf.addImage(cr[0], 'PNG', 105 - cw / 2, 58, cw, ch); } catch (e) {}
+    pdf.setTextColor(217, 192, 140); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.text('ENNISKILLEN ROYAL GRAMMAR SCHOOL', 105, 120, { align: 'center', charSpace: 1 });
+    pdf.setTextColor(255, 255, 255); pdf.setFont('times', 'bold'); pdf.setFontSize(40); pdf.text('AI in School', 105, 140, { align: 'center' });
+    pdf.setFont('times', 'italic'); pdf.setFontSize(20); pdf.setTextColor(201, 212, 230); pdf.text("A Teacher's Guide", 105, 152, { align: 'center' });
+    pdf.setDrawColor(184, 149, 90); pdf.setLineWidth(0.6); pdf.line(85, 162, 125, 162);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11); pdf.setTextColor(214, 222, 234);
+    pdf.text(`Whole-School AI Skills CPD Portfolio · ${list.length} issues`, 105, 174, { align: 'center' });
+    pdf.text(new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }), 105, 182, { align: 'center' });
+    // contents
+    pdf.addPage(); pdf.setTextColor(20, 40, 75); pdf.setFont('times', 'bold'); pdf.setFontSize(24); pdf.text('Contents', 20, 28);
+    pdf.setDrawColor(20, 40, 75); pdf.line(20, 32, 190, 32);
+    let pageNo = 3; const rows = list.map(i => { const r = [i.n, String(i.title).replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/–/g, '-'), pageNo]; pageNo += (i.imgs || i.pageDocs).length; return r; });
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10);
+    rows.forEach((r, k) => { const col = k < 34 ? 0 : 1, y = 42 + (k % 34) * 7.2, x = 20 + col * 88;
+      pdf.setTextColor(31, 79, 143); pdf.text(String(r[0]), x, y); pdf.setTextColor(28, 36, 48);
+      pdf.text(pdf.splitTextToSize(r[1], 66)[0], x + 8, y); pdf.setTextColor(93, 104, 120); pdf.text(String(r[2]), x + 80, y, { align: 'right' }); });
+    // pages
+    let done = 0; const total = list.reduce((t, i) => t + (i.imgs || i.pageDocs).length, 0);
+    for (const i of list) {
+      for (const p of (i.imgs || i.pageDocs)) {
+        msg.textContent = `Adding page ${++done} of ${total}…`;
+        const url = await (i.fsPages ? customPageImg(p) : fileImg(p));
+        const data = await blobURLtoDataURL(url), [w, h] = await imgSize(url);
+        pdf.addPage(); const k = Math.min(210 / w, 297 / h), W = w * k, H = h * k;
+        pdf.addImage(data, 'JPEG', (210 - W) / 2, (297 - H) / 2, W, H, undefined, 'FAST');
+      }
+    }
+    msg.textContent = 'Saving…';
+    pdf.save(`AI in School - ${which === 'all' ? 'Full series' : 'Released issues'} (${list.length} issues).pdf`);
+    msg.textContent = `Downloaded ${list.length} issues (${total + 2} pages).`;
+  } catch (e) { console.warn(e); msg.textContent = 'Couldn’t build the PDF: ' + (e.message || e); }
+  btn.disabled = false;
 }
 boot();
